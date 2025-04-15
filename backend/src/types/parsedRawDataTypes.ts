@@ -14,7 +14,7 @@ export type ParsedRawMatchend = {
 export type ParsedRawInfo = {
   matchId: number;
   duration: number;
-  winner: number;
+  winner: string;
   players: {
     hero: string;
     name: string;

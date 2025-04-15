@@ -40,9 +40,6 @@ export class ReplayService {
         parseMatchEnd(filePath),
       ]);
 
-      // Delete temp replay after parsing
-      await this.cleanUpFile(filePath);
-
       // Validate data consistency before processing
       this.validateMatchData(matchInfo, matchEnd);
 

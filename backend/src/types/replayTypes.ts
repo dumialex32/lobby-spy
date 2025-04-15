@@ -14,5 +14,5 @@ export type ProcessReplayResponse = {
   matchId: string;
   playerCount: number;
   duration: number;
-  winner: number;
+  winner: string;
 };
