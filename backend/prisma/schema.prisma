@@ -17,7 +17,7 @@ model LobbyGame {
   id             String        @id @default(uuid())
   duration       Int
   matchId        String        @unique
-  gameWinner     Int
+  gameWinner     String
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
   playerStats    PlayerStats[] 
