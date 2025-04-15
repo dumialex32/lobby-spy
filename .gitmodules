@@ -1,3 +1,3 @@
 [submodule "backend/parser/clarity-examples"]
 	path = backend/parser/clarity-examples
-	url = https://github.com/skadistats/clarity-examples.git
+	url = https://github.com/dumialex32/clarity-examples.git
