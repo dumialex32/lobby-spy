@@ -16,12 +16,16 @@ import {
   CurrentGamePlayerStats,
   ProcessReplayResponse,
 } from 'src/types/replayTypes';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class ReplayService {
   private readonly logger = new Logger(ReplayService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private configService: ConfigService,
+  ) {}
 
   /**
    * Processes a Dota 2 replay file, extracts match data, and saves it to the database
@@ -281,10 +285,9 @@ export class ReplayService {
       {
         status: HttpStatus.INTERNAL_SERVER_ERROR,
         error: 'Replay processing failed',
-        details:
-          process.env.NODE_ENV === 'development'
-            ? error.message
-            : 'Please contact support',
+        details: this.configService.get('NODE_ENV')
+          ? error.message
+          : 'Please contact support',
       },
       HttpStatus.INTERNAL_SERVER_ERROR,
     );

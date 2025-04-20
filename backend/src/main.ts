@@ -8,7 +8,10 @@ async function bootstrap() {
   app.use(cookieParser());
 
   app.enableCors({
-    origin: 'http://localhost:5713', // Allow only frontend domain
+    origin:
+      process.env.NODE_ENV === 'production'
+        ? process.env.PROD_FRONTEND_URL
+        : process.env.DEV_FRONTEND_URL, // Allow only frontend domain
     credentials: true, // Allow cookies to be sent with requests
   });
 

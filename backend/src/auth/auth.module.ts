@@ -7,12 +7,12 @@ import { SteamStrategy } from './steam.strategy';
 import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { UserModule } from '../users/user.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
     ConfigModule,
-    UserModule,
+    UsersModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -27,6 +27,6 @@ import { UserModule } from '../users/user.module';
   ],
   providers: [AuthService, SteamStrategy, JwtStrategy, JwtAuthGuard],
   controllers: [AuthController],
-  exports: [JwtModule], // exxport if needed by other modules
+  exports: [JwtModule], // Exxport if needed by other modules
 })
 export class AuthModule {}

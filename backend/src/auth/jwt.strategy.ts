@@ -1,9 +1,8 @@
-// jwt.strategy.ts
 import { Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Request } from 'express'; // Import express Request type
+import { Request } from 'express';
 
 // Define a return type for the validation
 interface JwtPayload {
@@ -31,7 +30,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   validate(payload: JwtPayload): UserPayload {
-    // Safely return the payload with the correct type
     return { userId: payload.sub, steamId: payload.steamId };
   }
 }

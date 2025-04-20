@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { User } from '@prisma/client';
 
 @Injectable()
-export class UserService {
+export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findBySteamId(steamId: string): Promise<User | null> {

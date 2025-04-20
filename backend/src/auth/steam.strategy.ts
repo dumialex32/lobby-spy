@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-steam';
 import { ConfigService } from '@nestjs/config';
-import { UserService } from '../users/user.service'; // Changed to relative import
+import { UsersService } from '../users/users.service';
 import { User } from '@prisma/client';
 
 interface SteamProfile {
@@ -14,13 +14,30 @@ interface SteamProfile {
 @Injectable()
 export class SteamStrategy extends PassportStrategy(Strategy, 'steam') {
   constructor(
-    private readonly usersService: UserService,
+    private readonly usersService: UsersService,
     configService: ConfigService,
   ) {
+    const isProd = configService.get('NODE_ENV') === 'production';
+    const returnURL: string =
+      (isProd
+        ? configService.get<string>('PROD_STEAM_RETURN_URL')
+        : configService.get<string>('STEAM_RETURN_URL')) ||
+      'http://localhost:3000/auth/steam/return';
+    console.log(returnURL);
+    const apiKey =
+      (isProd
+        ? configService.get<string>('PROD_STEAM_API_KEY')
+        : configService.get<string>('STEAM_API_KEY')) || '';
+
+    const realm: string =
+      (isProd
+        ? configService.get<string>('PROD_STEAM_REALM')
+        : configService.get<string>('STEAM_REALM')) || 'http://localhost:3000/';
+
     super({
-      returnURL: configService.get<string>('STEAM_RETURN_URL', ''),
-      realm: configService.get<string>('STEAM_REALM', ''),
-      apiKey: configService.get<string>('STEAM_API_KEY', ''),
+      returnURL,
+      realm,
+      apiKey,
     });
   }
 
