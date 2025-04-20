@@ -6,6 +6,4 @@ export class PrismaService extends PrismaClient {
   constructor() {
     super();
   }
-
-  // add custom methods for database interactions if needed
 }

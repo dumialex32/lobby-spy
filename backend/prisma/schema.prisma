@@ -6,12 +6,15 @@
 
 generator client {
   provider = "prisma-client-js"
+    output   = "../node_modules/.prisma/client"  
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+
 
 model LobbyGame {
   id             String        @id @default(uuid())
@@ -57,6 +60,14 @@ model Player {
   updatedAt      DateTime @updatedAt
 }
 
+model User {
+  id        String   @id @default(cuid())
+  steamId   String   @unique
+  username  String?
+  avatar    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
 
 
 
