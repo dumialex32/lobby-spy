@@ -1,6 +1,6 @@
-import { User } from '@prisma/client';
 import { Request } from 'express';
+import { UserWithLobbyRelations } from 'src/users/types/user.types';
 
 export interface AuthenticatedRequest extends Request {
-  user: User;
+  user: UserWithLobbyRelations;
 }

@@ -23,7 +23,7 @@ export class SteamStrategy extends PassportStrategy(Strategy, 'steam') {
         ? configService.get<string>('PROD_STEAM_RETURN_URL')
         : configService.get<string>('STEAM_RETURN_URL')) ||
       'http://localhost:3000/auth/steam/return';
-    console.log(returnURL);
+
     const apiKey =
       (isProd
         ? configService.get<string>('PROD_STEAM_API_KEY')
@@ -60,6 +60,7 @@ export class SteamStrategy extends PassportStrategy(Strategy, 'steam') {
 
       done(null, user);
     } catch (error: unknown) {
+      console.error('Steam validation error:', error);
       done((error as Error) ?? new Error('Authentication failed'), null);
     }
   }
