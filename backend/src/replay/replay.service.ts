@@ -34,7 +34,10 @@ export class ReplayService {
    * @throws ConflictException if replay already exists
    * @throws HttpException if processing fails
    */
-  async processReplay(filePath: string): Promise<ProcessReplayResponse> {
+  async processReplay(
+    filePath: string,
+    lobbyId: string,
+  ): Promise<ProcessReplayResponse> {
     try {
       this.logger.log(`Processing replay file: ${filePath}`);
 
@@ -55,7 +58,7 @@ export class ReplayService {
       }
 
       // Process in a transaction to ensure atomicity
-      await this.processMatchData(matchInfo, matchEnd);
+      await this.processMatchData(matchInfo, matchEnd, lobbyId);
 
       this.logger.log(`Successfully processed replay: ${matchInfo.matchId}`);
 
@@ -106,6 +109,7 @@ export class ReplayService {
   private async processMatchData(
     matchInfo: ParsedRawInfo,
     matchEnd: ParsedRawMatchend[],
+    lobbyId: string,
   ): Promise<void> {
     await this.prisma.$transaction(async (prisma) => {
       // First create the game with all player stats
@@ -114,6 +118,9 @@ export class ReplayService {
           matchId: String(matchInfo.matchId),
           duration: matchInfo.duration,
           gameWinner: matchInfo.winner, // to do: get string directly from parser
+          lobby: {
+            connect: { id: lobbyId },
+          },
           playerStats: {
             create: this.preparePlayerStatsData(matchInfo, matchEnd),
           },
