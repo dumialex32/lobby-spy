@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ReplayModule } from './replay/replay.module';
+import { LobbyModule } from './lobby/lobby.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { ReplayModule } from './replay/replay.module';
     AuthModule,
     UsersModule,
     ReplayModule,
+    LobbyModule,
   ],
 })
 export class AppModule {}
