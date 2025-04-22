@@ -6,7 +6,7 @@
 
 generator client {
   provider = "prisma-client-js"
-    output   = "../node_modules/.prisma/client"  
+  output   = "../node_modules/.prisma/client"
 }
 
 datasource db {
@@ -14,22 +14,25 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 // Lobby service models
-model Lobby {
-id        String   @id @default (uuid())
-name      String
-imageUrl  String?
-ownerId   String   @unique
-owner     User     @relation("LobbyOwner", fields: [ownerId], references: [id])
-members   User[]   @relation("LobbyMembers")
-games     LobbyGame[]
-createdAt DateTime @default(now())
-updatedAt DateTime @updatedAt
+enum LobbyVisibility {
+  PUBLIC
+  PRIVATE
 }
 
-
-
+model Lobby {
+  id          String          @id @default(uuid())
+  name        String
+  imageUrl    String?
+  description String
+  visible     LobbyVisibility @default(PUBLIC)
+  ownerId     String          @unique
+  owner       User            @relation("LobbyOwner", fields: [ownerId], references: [id])
+  members     User[]          @relation("LobbyMembers")
+  games       LobbyGame[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
 
 // User models
 enum UserRole {
@@ -39,31 +42,34 @@ enum UserRole {
 }
 
 model User {
-  id          String    @id @default(cuid())
-  steamId     String    @unique
-  username    String?
-  avatar      String?
-  lobbyId     String?   // it might be or not be in a lobby group
-  lobby       Lobby?    @relation("LobbyOwner") // it might own or not own a lobby group
-  memberLobby Lobby?    @relation("LobbyMembers", fields: [lobbyId], references: [id])
-  role        UserRole  @default(MEMBER)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id       String  @id @default(cuid())
+  steamId  String  @unique
+  username String?
+  avatar   String?
+
+  // users member of a lobby
+  lobbyId     String? // it might be or not be in a lobby group
+  memberLobby Lobby?  @relation("LobbyMembers", fields: [lobbyId], references: [id])
+
+  // owner of a lobby
+  lobby Lobby? @relation("LobbyOwner") // it might own or not own a lobby group
+
+  role      UserRole @default(MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-
-
 // Replay parsing data models
-  model LobbyGame {
-  id             String         @id @default(uuid())
-  duration       Int
-  matchId        String         @unique
-  gameWinner     String
-  lobbyId        String
-  lobby          Lobby          @relation(fields: [lobbyId], references: [id])
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  playerStats    PlayerStats[] 
+model LobbyGame {
+  id          String        @id @default(uuid())
+  duration    Int
+  matchId     String        @unique
+  gameWinner  String
+  lobbyId     String
+  lobby       Lobby         @relation(fields: [lobbyId], references: [id])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  playerStats PlayerStats[]
 }
 
 model PlayerStats {
@@ -80,26 +86,22 @@ model PlayerStats {
   denies      Int
   level       Int
   lobbyGameId String
-  lobbyGame   LobbyGame  @relation(fields: [lobbyGameId], references: [id])
+  lobbyGame   LobbyGame @relation(fields: [lobbyGameId], references: [id])
 }
 
 model Player {
-  id             String  @id @default(uuid())
-  steamId        String  @unique
-  playerName     String
-  totalGames     Int
-  totalKills     Int
-  totalDeaths    Int
-  totalAssists   Int
-  totalNetworth  Int
-  avgKills       Float
-  avgDeaths      Float
-  avgAssists     Float
-  avgNetworth    Float
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id            String   @id @default(uuid())
+  steamId       String   @unique
+  playerName    String
+  totalGames    Int
+  totalKills    Int
+  totalDeaths   Int
+  totalAssists  Int
+  totalNetworth Int
+  avgKills      Float
+  avgDeaths     Float
+  avgAssists    Float
+  avgNetworth   Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
-
-
-
-

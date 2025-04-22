@@ -22,7 +22,7 @@ export class CreateLobbyDto {
 
   @IsString()
   @IsOptional()
-  avatarUrl?: string;
+  imageUrl?: string;
 
   @IsString()
   @MinLength(5)
