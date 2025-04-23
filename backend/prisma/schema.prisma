@@ -25,7 +25,8 @@ model Lobby {
   name        String
   imageUrl    String?
   description String
-  visible     LobbyVisibility @default(PUBLIC)
+  visibility  LobbyVisibility @default(PUBLIC)
+  capacity    Int             @default(30)
   ownerId     String          @unique
   owner       User            @relation("LobbyOwner", fields: [ownerId], references: [id])
   members     User[]          @relation("LobbyMembers")
