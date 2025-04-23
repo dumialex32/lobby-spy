@@ -7,7 +7,7 @@ import { SteamStrategy } from './steam.strategy';
 import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { UsersModule } from '../users/users.module';
+import { UsersModule } from 'src/users/users.module';
 
 @Module({
   imports: [

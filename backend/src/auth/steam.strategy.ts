@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-steam';
 import { ConfigService } from '@nestjs/config';
-import { UsersService } from '../users/users.service';
 import { User } from '@prisma/client';
+import { UsersService } from 'src/users/users.service';
 
 interface SteamProfile {
   id: string;
