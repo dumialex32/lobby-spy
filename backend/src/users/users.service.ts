@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { User } from '@prisma/client';
 import { UserWithLobbyRelations } from './types/user.types';
@@ -25,5 +25,14 @@ export class UsersService {
     return await this.prisma.user.create({
       data,
     });
+  }
+
+  async getUserOrThrow(steamId: string): Promise<UserWithLobbyRelations> {
+    const user = await this.findBySteamId(steamId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return user;
   }
 }
