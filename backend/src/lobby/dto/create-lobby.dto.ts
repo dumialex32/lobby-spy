@@ -1,3 +1,4 @@
+import { LobbyVisibility } from '@prisma/client';
 import {
   IsEnum,
   IsOptional,
@@ -6,19 +7,13 @@ import {
   MinLength,
 } from 'class-validator';
 
-export enum LobbyVisibility {
-  PUBLIC = 'PUBLIC',
-  PRIVATE = 'PRIVATE',
-}
-
 export class CreateLobbyDto {
   @IsString()
   @MinLength(3)
   name: string;
 
   @IsEnum(LobbyVisibility)
-  @IsOptional()
-  visibility?: LobbyVisibility;
+  visibility: LobbyVisibility;
 
   @IsString()
   @IsOptional()
