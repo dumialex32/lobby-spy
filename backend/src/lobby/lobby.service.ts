@@ -8,6 +8,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateLobbyDto } from './dto/create-lobby.dto';
 import { LobbyVisibility } from '@prisma/client';
 import { UsersService } from 'src/users/users.service';
+import { UserWithLobbyRelations } from 'src/users/types/user.types';
 
 @Injectable()
 export class LobbyService {
@@ -17,33 +18,24 @@ export class LobbyService {
   ) {}
 
   // Create lobby service
-  async createLobby(dto: CreateLobbyDto, steamId: string) {
-    // Check if there is a lobby whose owner is the user with this steam id
-    const existingLobby = await this.prismaService.lobby.findFirst({
-      where: {
-        owner: { steamId },
-      },
-    });
-
-    if (existingLobby) {
-      throw new BadRequestException('You already own a lobby');
+  async createLobby(dto: CreateLobbyDto, user: UserWithLobbyRelations) {
+    // 2.Check if user is a lobby owner or a member
+    // both, owner and members have "memberLobby" property
+    if (user.memberLobby) {
+      throw new ForbiddenException(
+        'You are already a member or an owner of a lobby',
+      );
     }
 
-    // Create new lobby
-    const user = await this.usersService.getUserOrThrow(steamId);
-
-    if (!user) {
-      throw new BadRequestException('User not found');
-    }
-
+    // Create lobby
     const newLobby = await this.prismaService.lobby.create({
       data: {
         name: dto.name,
         visibility: dto.visibility || LobbyVisibility.PUBLIC,
-        imageUrl: dto.description,
+        imageUrl: dto.imageUrl,
         description: dto.description,
-        owner: { connect: { steamId } },
-        members: { connect: { steamId } },
+        owner: { connect: { id: user.id } },
+        members: { connect: { id: user.id } },
       },
       include: {
         owner: true,
@@ -54,10 +46,11 @@ export class LobbyService {
     // Update user to owner and link lobby
     await this.prismaService.user.update({
       where: {
-        steamId,
+        id: user.id,
       },
       data: {
         role: 'OWNER',
+        lobby: { connect: { id: newLobby.id } },
         lobbyId: newLobby.id,
       },
     });
@@ -66,7 +59,7 @@ export class LobbyService {
   }
 
   // Join lobby service
-  async joinLobby(lobbyId: string, steamId: string) {
+  async joinLobby(lobbyId: string, user: UserWithLobbyRelations) {
     // Check if lobby exist
     const lobby = await this.prismaService.lobby.findUnique({
       where: {
@@ -75,18 +68,11 @@ export class LobbyService {
     });
 
     if (!lobby) {
-      throw new BadRequestException('Lobby not found');
-    }
-
-    // Check if user exist
-    const user = await this.usersService.getUserOrThrow(steamId);
-
-    if (!user) {
-      throw new BadRequestException('User not found');
+      throw new NotFoundException('Lobby not found');
     }
 
     // Check if user is already member or owner
-    if (user.lobbyId) {
+    if (user.memberLobby) {
       throw new BadRequestException('You already belong to or own a lobby');
     }
 
@@ -100,38 +86,49 @@ export class LobbyService {
       throw new BadRequestException('This lobby is full');
     }
 
+    // Update the user
     await this.prismaService.user.update({
       where: {
-        steamId,
+        id: user.id,
       },
       data: {
         lobbyId,
       },
     });
 
-    return { message: 'Successfully joined the lobby' };
+    return { message: `Welcome to ${lobby.name}` };
   }
 
   // Get personal lobby service
-  async getMyLobby(steamId: string) {
-    // Get user
-    const user = await this.usersService.getUserOrThrow(steamId);
-
-    // Check if user is part of a lobby
-    if (!user?.lobby && !user?.memberLobby) {
+  async getMyLobby(user: UserWithLobbyRelations) {
+    // Check if user has a lobby
+    if (!user.memberLobby) {
       throw new NotFoundException('You are not part of a lobby');
     }
 
-    return user.lobby || user.memberLobby;
+    // Fetch lobby
+    const lobby = await this.prismaService.lobby.findUnique({
+      where: {
+        id: user.memberLobby.id,
+      },
+      include: {
+        members: true,
+        owner: true,
+        games: true,
+      },
+    });
+
+    return lobby;
   }
 
   // Get lobby service
-  async getLobby(lobbyId: string, steamId: string) {
+  async getLobby(lobbyId: string, user: UserWithLobbyRelations) {
     const lobby = await this.prismaService.lobby.findUnique({
       where: { id: lobbyId },
       include: {
         owner: true,
         members: true,
+        games: true,
       },
     });
 
@@ -140,13 +137,7 @@ export class LobbyService {
     }
 
     if (lobby.visibility === 'PRIVATE') {
-      const isOwner = lobby.owner.steamId === steamId;
-      const isMember = lobby.members.some(
-        (member) => member.steamId === steamId,
-      );
-      const isLobbyMember = isOwner || isMember;
-
-      if (!isLobbyMember) {
+      if (user.memberLobby?.id !== lobbyId) {
         throw new ForbiddenException(
           'Only members can access this private lobby',
         );
@@ -159,7 +150,7 @@ export class LobbyService {
   // Update lobby visibility service
   async updateLobbyVisibility(
     lobbyId: string,
-    steamId: string,
+    user: UserWithLobbyRelations,
     visibility: 'PRIVATE' | 'PUBLIC',
   ) {
     // Get lobby
@@ -173,14 +164,8 @@ export class LobbyService {
       throw new NotFoundException('Lobby not found');
     }
 
-    // Get user
-    const user = await this.usersService.getUserOrThrow(steamId);
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
     // Check if the user is the owner of the lobby
-    if (lobby.ownerId !== user.steamId) {
+    if (lobby.ownerId !== user.id) {
       throw new ForbiddenException(
         'Only the owner can change the lobby visibility',
       );

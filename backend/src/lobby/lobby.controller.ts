@@ -22,7 +22,7 @@ export class LobbyController {
 
   @Post('create')
   createLobby(@Body() dto: CreateLobbyDto, @Req() req: AuthenticatedRequest) {
-    return this.lobbyService.createLobby(dto, req.user.steamId);
+    return this.lobbyService.createLobby(dto, req.user);
   }
 
   // Join lobby controller
@@ -31,13 +31,13 @@ export class LobbyController {
     @Param('lobbyId') lobbyId: string,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.lobbyService.joinLobby(lobbyId, req.user.steamId);
+    return this.lobbyService.joinLobby(lobbyId, req.user);
   }
 
   // Get personal lobby controller
   @Get('/myLobby')
   getMyLobby(@Req() req: AuthenticatedRequest) {
-    return this.lobbyService.getMyLobby(req.user.steamId);
+    return this.lobbyService.getMyLobby(req.user);
   }
 
   // Get lobby controller
@@ -46,7 +46,7 @@ export class LobbyController {
     @Param('lobbyId') lobbyId: string,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.lobbyService.getLobby(lobbyId, req.user.steamId);
+    return this.lobbyService.getLobby(lobbyId, req.user);
   }
 
   // Update lobby visibility controller
@@ -59,7 +59,7 @@ export class LobbyController {
   ) {
     return this.lobbyService.updateLobbyVisibility(
       lobbyId,
-      req.user.steamId,
+      req.user,
       dto.visibility,
     );
   }
