@@ -10,7 +10,7 @@ const execAsync = promisify(exec);
 // Absolute path to the directory containing gradlew.bat
 const gradlewBatPath = path.resolve(process.cwd(), 'parser/clarity-examples');
 
-// run gradlew on win or linux
+// Run gradlew on windows or linux
 const isWindows = os.platform() === 'win32';
 const gradlewExecutable = isWindows ? 'gradlew.bat' : 'gradlew';
 
@@ -30,7 +30,7 @@ export async function parseMatchInfo(filePath: string) {
     const absoluteFilePath = path.resolve(process.cwd(), filePath);
     console.log('Processing file:', absoluteFilePath);
 
-    // verify if file exists
+    // Verify if replay file exist
     await fs.access(absoluteFilePath);
 
     const command = `${gradlewExecutable} infoRun --args "\\"${absoluteFilePath}\\""`; // Command for Gradle run

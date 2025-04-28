@@ -1,5 +1,5 @@
 import { Controller, Get, Req, Res, UseGuards } from '@nestjs/common';
-import { JwtAuthGuard } from './jwt-auth.guard';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AuthenticatedRequest } from './auth-request.interface';
 import { AuthService } from './auth.service';
 import { Response } from 'express';

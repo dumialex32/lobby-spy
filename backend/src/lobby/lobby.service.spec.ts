@@ -12,61 +12,83 @@ import { LobbyVisibility, UserRole } from '@prisma/client';
 import { UsersService } from 'src/users/users.service';
 
 /**
- * Test suite for LobbyService
+ * Comprehensive test suite for LobbyService
+ *
+ * Tests core lobby business logic including:
+ * - Lobby creation and membership rules
+ * - Visibility management
+ * - Capacity validation
+ * - Error scenarios
  */
 describe('LobbyService', () => {
   let service: LobbyService;
 
-  // Mock user data for testing
+  /**
+   * Mock user data representing a standard user
+   * - Initial state: Not in any lobby
+   * - Standard member role
+   */
   const mockUser: UserWithLobbyRelations = {
     id: 'user1',
     steamId: 'steam1',
     username: 'TestUser',
     avatar: 'avatar_url',
     role: UserRole.MEMBER,
-    memberLobby: null, // Initially not in any lobby
+    memberLobby: null,
     lobby: null,
     lobbyId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
 
-  // Mock lobby data for testing
+  /**
+   * Mock lobby data representing a standard lobby
+   * - Public visibility
+   * - 30 member capacity
+   * - Owned by mockUser
+   */
   const mockLobby = {
     id: 'lobby1',
     name: 'Test Lobby',
     visibility: LobbyVisibility.PUBLIC,
     description: 'Test description',
     capacity: 30,
-    ownerId: 'user1', // Owned by our mock user
+    ownerId: 'user1',
     owner: mockUser,
-    members: [mockUser], // Contains our mock user as member
+    members: [mockUser],
     imageUrl: 'image_url',
     games: [],
     createdAt: new Date(),
     updatedAt: new Date(),
   };
 
-  // Mock Prisma service methods
+  /**
+   * Mock PrismaService implementation
+   * - Methods mocked with jest.fn()
+   * - Individual tests will override returns as needed
+   */
   const mockPrismaService = {
     user: {
-      findUnique: jest.fn(), // Mock user lookup
-      update: jest.fn(), // Mock user updates
-      count: jest.fn(), // Mock counting users
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      count: jest.fn(),
     },
     lobby: {
-      create: jest.fn(), // Mock lobby creation
-      findUnique: jest.fn(), // Mock lobby lookup
-      update: jest.fn(), // Mock lobby updates
+      create: jest.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
     },
   };
 
-  // Mock UsersService
+  // Mock UsersService implementation
   const mockUsersService = {
-    getUserById: jest.fn(), // Mock user retrieval
+    getUserById: jest.fn(),
   };
 
-  // Setup test module before each test
+  /**
+   * Test module setup
+   * - Configures testing module with mocked dependencies
+   */
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -91,11 +113,15 @@ describe('LobbyService', () => {
   });
 
   /**
-   * Test suite for createLobby functionality
+   * Test group for createLobby functionality
+   *
+   * Verifies:
+   * - User membership validation
+   * - Lobby creation process
+   * - Owner role assignment
    */
   describe('createLobby', () => {
     it('should throw ForbiddenException if user is already in a lobby', async () => {
-      // Arrange: Create a user who is already in a lobby
       const userInLobby = { ...mockUser, memberLobby: mockLobby };
       const createLobbyDto: CreateLobbyDto = {
         name: 'New Lobby',
@@ -103,14 +129,12 @@ describe('LobbyService', () => {
         description: 'A new lobby for testing',
       };
 
-      // Act & Assert: Verify the service throws the expected exception
       await expect(
         service.createLobby(createLobbyDto, userInLobby),
       ).rejects.toThrow(ForbiddenException);
     });
 
     it('should create a lobby if user is not in any lobby', async () => {
-      // Arrange: Mock the Prisma service responses
       mockPrismaService.lobby.create.mockResolvedValue(mockLobby);
       mockPrismaService.user.update.mockResolvedValue(mockUser);
 
@@ -120,10 +144,8 @@ describe('LobbyService', () => {
         description: 'A new lobby for testing',
       };
 
-      // Act: Call the service method
       const result = await service.createLobby(createLobbyDto, mockUser);
 
-      // Assert: Verify the results and calls
       expect(result).toEqual(mockLobby);
       expect(mockPrismaService.lobby.create).toHaveBeenCalledWith({
         data: {
@@ -151,54 +173,51 @@ describe('LobbyService', () => {
   });
 
   /**
-   * Test suite for joinLobby functionality
+   * Test group for joinLobby functionality
+   *
+   * Verifies:
+   * - Existing membership validation
+   * - Lobby existence checks
+   * - Capacity management
+   * - Successful join scenarios
    */
   describe('joinLobby', () => {
     it('should throw BadRequestException if user is already in a lobby', async () => {
-      // Arrange: User already in a lobby and mock lobby exists
       const userInLobby = { ...mockUser, memberLobby: mockLobby };
       mockPrismaService.lobby.findUnique.mockResolvedValue(mockLobby);
 
-      // Act & Assert: Verify the service throws the expected exception
       await expect(
         service.joinLobby(mockLobby.id, userInLobby),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw NotFoundException if lobby does not exist', async () => {
-      // Arrange: Mock lobby not found
       mockPrismaService.lobby.findUnique.mockResolvedValue(null);
 
-      // Act & Assert: Verify the service throws the expected exception
       await expect(service.joinLobby('nonexistent', mockUser)).rejects.toThrow(
         NotFoundException,
       );
     });
 
     it('should throw BadRequestException if lobby is full', async () => {
-      // Arrange: Mock lobby exists and is at capacity
       mockPrismaService.lobby.findUnique.mockResolvedValue(mockLobby);
       mockPrismaService.user.count.mockResolvedValue(mockLobby.capacity);
 
-      // Act & Assert: Verify the service throws the expected exception
       await expect(service.joinLobby(mockLobby.id, mockUser)).rejects.toThrow(
         BadRequestException,
       );
     });
 
     it('should add user to the lobby if valid', async () => {
-      // Arrange: Mock valid join scenario
       mockPrismaService.lobby.findUnique.mockResolvedValue(mockLobby);
-      mockPrismaService.user.count.mockResolvedValue(29); // Below capacity
+      mockPrismaService.user.count.mockResolvedValue(29);
       mockPrismaService.user.update.mockResolvedValue({
         ...mockUser,
         lobbyId: mockLobby.id,
       });
 
-      // Act: Call the service method
       const result = await service.joinLobby(mockLobby.id, mockUser);
 
-      // Assert: Verify the results and calls
       expect(result).toEqual({ message: `Welcome to ${mockLobby.name}` });
       expect(mockPrismaService.user.update).toHaveBeenCalledWith({
         where: { id: mockUser.id },
@@ -208,25 +227,25 @@ describe('LobbyService', () => {
   });
 
   /**
-   * Test suite for getMyLobby functionality
+   * Test group for getMyLobby functionality
+   *
+   * Verifies:
+   * - Lobby existence validation
+   * - Proper data retrieval
    */
   describe('getMyLobby', () => {
     it('should throw NotFoundException if user is not in any lobby', async () => {
-      // Act & Assert: Verify the service throws for user not in lobby
       await expect(service.getMyLobby(mockUser)).rejects.toThrow(
         NotFoundException,
       );
     });
 
     it("should return user's lobby if they belong to one", async () => {
-      // Arrange: User is in a lobby
       const userInLobby = { ...mockUser, memberLobby: mockLobby };
       mockPrismaService.lobby.findUnique.mockResolvedValue(mockLobby);
 
-      // Act: Call the service method
       const result = await service.getMyLobby(userInLobby);
 
-      // Assert: Verify the results and calls
       expect(result).toEqual(mockLobby);
       expect(mockPrismaService.lobby.findUnique).toHaveBeenCalledWith({
         where: { id: mockLobby.id },
@@ -240,35 +259,35 @@ describe('LobbyService', () => {
   });
 
   /**
-   * Test suite for getLobby functionality
+   * Test group for getLobby functionality
+   *
+   * Verifies:
+   * - Lobby existence validation
+   * - Visibility rules enforcement
+   * - Member access rights
    */
   describe('getLobby', () => {
     it('should throw NotFoundException if lobby does not exist', async () => {
-      // Arrange: Mock lobby not found
       mockPrismaService.lobby.findUnique.mockResolvedValue(null);
 
-      // Act & Assert: Verify the service throws the expected exception
       await expect(service.getLobby('nonexistent', mockUser)).rejects.toThrow(
         NotFoundException,
       );
     });
 
     it('should throw ForbiddenException if lobby is private and user is not a member', async () => {
-      // Arrange: Create private lobby and mock response
       const privateLobby = {
         ...mockLobby,
         visibility: LobbyVisibility.PRIVATE,
       };
       mockPrismaService.lobby.findUnique.mockResolvedValue(privateLobby);
 
-      // Act & Assert: Verify the service throws the expected exception
       await expect(service.getLobby(privateLobby.id, mockUser)).rejects.toThrow(
         ForbiddenException,
       );
     });
 
     it('should return lobby if user is a member or owner', async () => {
-      // Arrange: User is in a private lobby
       const privateLobby = {
         ...mockLobby,
         visibility: LobbyVisibility.PRIVATE,
@@ -276,34 +295,32 @@ describe('LobbyService', () => {
       const userInLobby = { ...mockUser, memberLobby: privateLobby };
       mockPrismaService.lobby.findUnique.mockResolvedValue(privateLobby);
 
-      // Act: Call the service method
       const result = await service.getLobby(privateLobby.id, userInLobby);
 
-      // Assert: Verify the results
       expect(result).toEqual(privateLobby);
     });
 
     it('should return public lobby even if user is not a member', async () => {
-      // Arrange: Mock public lobby
       mockPrismaService.lobby.findUnique.mockResolvedValue(mockLobby);
 
-      // Act: Call the service method
       const result = await service.getLobby(mockLobby.id, mockUser);
 
-      // Assert: Verify the results
       expect(result).toEqual(mockLobby);
     });
   });
 
   /**
-   * Test suite for updateLobbyVisibility functionality
+   * Test group for updateLobbyVisibility functionality
+   *
+   * Verifies:
+   * - Lobby existence validation
+   * - Owner verification
+   * - Successful visibility updates
    */
   describe('updateLobbyVisibility', () => {
     it('should throw NotFoundException if lobby does not exist', async () => {
-      // Arrange: Mock lobby not found
       mockPrismaService.lobby.findUnique.mockResolvedValue(null);
 
-      // Act & Assert: Verify the service throws the expected exception
       await expect(
         service.updateLobbyVisibility(
           'nonexistent',
@@ -314,11 +331,9 @@ describe('LobbyService', () => {
     });
 
     it('should throw ForbiddenException if user is not the owner', async () => {
-      // Arrange: User is not the owner
       const notOwner = { ...mockUser, id: 'user2' };
       mockPrismaService.lobby.findUnique.mockResolvedValue(mockLobby);
 
-      // Act & Assert: Verify the service throws the expected exception
       await expect(
         service.updateLobbyVisibility(
           mockLobby.id,
@@ -329,7 +344,6 @@ describe('LobbyService', () => {
     });
 
     it('should update the lobby visibility if user is the owner', async () => {
-      // Arrange: User is the owner
       mockPrismaService.lobby.findUnique.mockResolvedValue(mockLobby);
       const updatedLobby = {
         ...mockLobby,
@@ -337,14 +351,12 @@ describe('LobbyService', () => {
       };
       mockPrismaService.lobby.update.mockResolvedValue(updatedLobby);
 
-      // Act: Call the service method
       const result = await service.updateLobbyVisibility(
         mockLobby.id,
         mockUser,
         LobbyVisibility.PRIVATE,
       );
 
-      // Assert: Verify the results and calls
       expect(result.visibility).toBe(LobbyVisibility.PRIVATE);
       expect(mockPrismaService.lobby.update).toHaveBeenCalledWith({
         where: { id: mockLobby.id },

@@ -3,14 +3,17 @@ import { AuthService } from './auth.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { createMockUser } from 'src/common/utils/test-utils/mockUser';
+import { UserWithLobbyRelations } from 'src/users/types/user.types';
 
 /**
- * Comprehensive test suite for AuthService
+ * AuthService Test Suite
  *
- * Tests all authentication service functionality including:
+ * Tests the core authentication service functionality including:
  * - JWT token generation
  * - JWT token verification
  * - Configuration handling
+ *
+ * Uses mocked JwtService and ConfigService to isolate tests
  */
 describe('AuthService', () => {
   let service: AuthService;
@@ -18,10 +21,10 @@ describe('AuthService', () => {
   let configService: ConfigService;
 
   /**
-   * Test module setup before each test case
-   * - Configures all dependencies with mock implementations
-   * - Sets up mock JWT service with token generation/verification
-   * - Mocks configuration values for JWT settings
+   * Test setup before each test case
+   * - Creates fresh testing module
+   * - Mocks JWT service with token generation/verification
+   * - Mocks configuration service with test values
    */
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -40,9 +43,9 @@ describe('AuthService', () => {
             get: jest.fn().mockImplementation((key: string) => {
               switch (key) {
                 case 'JWT_SECRET':
-                  return 'test-secret'; // Mock secret for testing
+                  return 'test-secret'; // Mock JWT signing secret
                 case 'JWT_EXPIRES_IN':
-                  return '1d'; // Standard expiration
+                  return '1d'; // Mock token expiration
                 default:
                   return null;
               }
@@ -60,80 +63,92 @@ describe('AuthService', () => {
   /**
    * JWT Generation Tests
    *
-   * Verifies the token generation process including:
+   * Verifies token creation with:
    * - Proper payload construction
    * - Correct configuration usage
-   * - Successful token return
    */
   describe('generateJwt', () => {
-    it('should generate a JWT token with proper payload and configuration', async () => {
-      // Mock user data
+    it('should generate token with user data and proper config', async () => {
+      // Arrange: Create mock user
       const mockUser = createMockUser({
         id: 'user-id',
         steamId: 'steam-id',
         username: 'testuser',
       });
 
-      // Execute token generation
-      const result = await service.generateJwt(mockUser as any);
+      // Act: Generate token
+      const result = await service.generateJwt(mockUser);
 
-      // Verify returned token
+      // Assert: Verify results
       expect(result).toBe('mock-jwt-token');
 
-      // Verify JWT service was called with correct payload
+      // Verify payload structure
       expect(jwtService.signAsync).toHaveBeenCalledWith(
         {
-          sub: 'user-id', // Standard JWT subject claim
-          steamId: 'steam-id', // Custom claim
-          username: 'testuser', // Custom claim
+          sub: 'user-id',
+          steamId: 'steam-id',
+          username: 'testuser',
         },
         {
-          expiresIn: '1d', // From config
-          secret: 'test-secret', // From config
+          expiresIn: '1d',
+          secret: 'test-secret',
         },
       );
+
+      // Verify config was accessed
+      expect(configService.get).toHaveBeenCalledWith('JWT_SECRET');
+      expect(configService.get).toHaveBeenCalledWith('JWT_EXPIRES_IN');
     });
 
-    // Edge case: Empty user data
-    it('should handle minimal user data', async () => {
-      const minimalUser = { id: 'user-id' };
-      await service.generateJwt(minimalUser as any);
+    it('should work with minimal required user data', async () => {
+      // Arrange: Minimal required user data
+      const minimalUser = createMockUser({
+        id: 'user-id',
+        steamId: 'steam-id',
+      });
 
+      // Act & Assert: Should work with required fields
+      await service.generateJwt(minimalUser);
       expect(jwtService.signAsync).toHaveBeenCalledWith(
-        expect.objectContaining({ sub: 'user-id' }),
+        expect.objectContaining({
+          sub: 'user-id',
+          steamId: 'steam-id',
+        }),
         expect.any(Object),
       );
     });
   });
 
   /**
-   * JWT Verification Tests
+   * Token Verification Tests
    *
-   * Verifies the token verification process including:
-   * - Proper token validation
-   * - Correct secret usage
-   * - Payload extraction
+   * Verifies token validation with:
+   * - Proper secret usage
+   * - Error propagation
    */
   describe('verifyToken', () => {
-    it('should verify a JWT token using configured secret', async () => {
+    it('should verify token using configured secret', async () => {
+      // Arrange: Test token
       const testToken = 'test-token-123';
+
+      // Act: Verify token
       const result = await service.verifyToken(testToken);
 
-      // Verify returned payload
+      // Assert: Verify results
       expect(result).toEqual({ sub: 'user-id' });
-
-      // Verify JWT service was called correctly
       expect(jwtService.verifyAsync).toHaveBeenCalledWith(testToken, {
         secret: 'test-secret',
       });
+      expect(configService.get).toHaveBeenCalledWith('JWT_SECRET');
     });
 
-    // Error case: Invalid token
     it('should propagate verification errors', async () => {
+      // Arrange: Mock verification failure
       (jwtService.verifyAsync as jest.Mock).mockRejectedValue(
         new Error('Invalid token'),
       );
 
+      // Act & Assert: Verify error is thrown
       await expect(service.verifyToken('invalid-token')).rejects.toThrow(
         'Invalid token',
       );
@@ -143,13 +158,30 @@ describe('AuthService', () => {
   /**
    * Configuration Tests
    *
-   * Verifies proper handling of configuration values
+   * Verifies proper configuration handling by
+   * checking calls during actual method execution
    */
   describe('Configuration', () => {
-    it('should use correct JWT configuration', () => {
-      // Verify config service was queried for required values
+    it('should access config when generating tokens', async () => {
+      // Act: Call token generation with valid user
+      await service.generateJwt(
+        createMockUser({
+          id: 'user-id',
+          steamId: 'steam-id',
+        }),
+      );
+
+      // Assert: Verify config was accessed
       expect(configService.get).toHaveBeenCalledWith('JWT_SECRET');
       expect(configService.get).toHaveBeenCalledWith('JWT_EXPIRES_IN');
+    });
+
+    it('should access config when verifying tokens', async () => {
+      // Act: Call token verification
+      await service.verifyToken('any-token');
+
+      // Assert: Verify config was accessed
+      expect(configService.get).toHaveBeenCalledWith('JWT_SECRET');
     });
   });
 });
