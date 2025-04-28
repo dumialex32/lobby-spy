@@ -38,4 +38,18 @@ export default tseslint.config(
       ],
     },
   },
+
+  // allows unbound mocks in test files (*.spec.ts, *.test.ts)
+  {
+    files: ['**/*.spec.ts', '**/*.test.ts'],
+    rules: {
+      '@typescript-eslint/unbound-method': [
+        'error',
+        {
+          ignoreStatic: true,
+          ignoreVirtual: true,
+        },
+      ],
+    },
+  },
 );
