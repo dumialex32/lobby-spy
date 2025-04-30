@@ -1,3 +1,14 @@
+/**
+ * WebSocket Gateway for Lobby Management
+ *
+ * Handles real-time communication for lobby operations including:
+ * - User connections/disconnections
+ * - Join requests and approvals
+ * - Lobby member notifications
+ * - Visibility changes
+ *
+ * All WebSocket communications are authenticated using JWT tokens.
+ */
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -9,7 +20,13 @@ import {
   MessageBody,
   WsException,
 } from '@nestjs/websockets';
-import { Logger, UseFilters, UsePipes } from '@nestjs/common';
+import {
+  Logger,
+  UseFilters,
+  UsePipes,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -22,23 +39,20 @@ import {
 } from './dto/websocket.dto';
 import { User } from '@prisma/client';
 import { WsExceptionFilter } from '../common/filters/ws-exception.filter';
+import { LobbyService } from './lobby.service';
 
 /**
- * Extends Socket.io's Socket with authenticated user data.
+ * Extended Socket interface with authenticated user data
  */
 interface AuthenticatedSocket extends Socket {
   user: {
-    id: string;
-    lobbyId?: string | null;
-    memberLobbyId?: string | null;
-    username: string;
+    id: string; // User ID from database
+    lobbyId?: string | null; // ID of lobby user owns (if any)
+    memberLobbyId?: string | null; // ID of lobby user is member of (if any)
+    username: string; // User's display name (fallback to 'Anonymous')
   };
 }
 
-/**
- * Handles WebSocket communication for the 'lobby' namespace.
- * Supports user authentication, join requests, and request approvals.
- */
 @WebSocketGateway({
   namespace: 'lobby',
   cors: {
@@ -57,17 +71,23 @@ export class LobbyGateway
 
   private logger = new Logger(LobbyGateway.name);
 
-  /** Keeps track of connected users by their user ID. */
+  /**
+   * Map to track connected users by their ID
+   * Key: user ID
+   * Value: Socket instance
+   */
   private connectedUsers = new Map<string, Socket>();
 
   constructor(
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    @Inject(forwardRef(() => LobbyService))
+    private readonly lobbyService: LobbyService,
   ) {}
 
   /**
-   * Called once the WebSocket server is initialized.
-   * @param server - The initialized Socket.IO server instance.
+   * Called after WebSocket server initialization
+   * @param server - The initialized Socket.IO server instance
    */
   afterInit(server: Server): void {
     this.logger.log('Lobby WebSocket Gateway initialized');
@@ -77,8 +97,12 @@ export class LobbyGateway
   }
 
   /**
-   * Handles new client connections and authenticates the user.
-   * @param socket - The connected WebSocket client.
+   * Handles new client connections
+   * - Authenticates user via JWT
+   * - Sets up user data on socket
+   * - Joins relevant rooms
+   * @param socket - The connected WebSocket client
+   * @throws Disconnects socket if authentication fails
    */
   async handleConnection(socket: AuthenticatedSocket): Promise<void> {
     try {
@@ -89,6 +113,7 @@ export class LobbyGateway
         secret: this.configService.get<string>('JWT_SECRET'),
       });
 
+      // Attach user data to socket
       socket.user = {
         id: user.id,
         username: user.username || 'Anonymous',
@@ -96,11 +121,15 @@ export class LobbyGateway
         memberLobbyId: user.memberLobbyId ?? null,
       };
 
+      // Track connected user
       this.connectedUsers.set(user.id, socket);
 
-      void socket.join(`user-${user.id}`);
-      if (user.lobbyId) void socket.join(`lobby-${user.lobbyId}`);
-      if (user.memberLobbyId) void socket.join(`lobby-${user.memberLobbyId}`);
+      // Join user-specific room
+      await socket.join(`user-${user.id}`);
+
+      // Join lobby rooms if applicable
+      if (user.lobbyId) await socket.join(`lobby-${user.lobbyId}`);
+      if (user.memberLobbyId) await socket.join(`lobby-${user.memberLobbyId}`);
 
       this.logger.log(`Client connected: ${user.id}`);
     } catch (err: unknown) {
@@ -111,8 +140,8 @@ export class LobbyGateway
   }
 
   /**
-   * Handles client disconnection and cleans up user data.
-   * @param socket - The disconnected WebSocket client.
+   * Handles client disconnections
+   * @param socket - The disconnected WebSocket client
    */
   handleDisconnect(socket: AuthenticatedSocket): void {
     if (socket.user?.id) {
@@ -122,10 +151,10 @@ export class LobbyGateway
   }
 
   /**
-   * Handles a 'join-request' event from a client.
-   * Only lobby owners are allowed to receive join requests.
-   * @param socket - The WebSocket client.
-   * @param data - The join request payload.
+   * Handles join request messages
+   * @param socket - The requesting client's socket
+   * @param data - Join request payload
+   * @throws WsException if user is not a lobby owner
    */
   @SubscribeMessage('join-request')
   @UsePipes(new ZodValidationPipe(joinRequestSchema))
@@ -140,10 +169,10 @@ export class LobbyGateway
   }
 
   /**
-   * Handles a 'request-response' event for accepting/rejecting join requests.
-   * Only the lobby owner can respond.
-   * @param socket - The WebSocket client.
-   * @param data - The response payload.
+   * Handles request approval responses
+   * @param socket - The responding client's socket
+   * @param data - Response payload
+   * @throws WsException if user is not the lobby owner
    */
   @SubscribeMessage('request-response')
   @UsePipes(new ZodValidationPipe(requestResponseSchema))
@@ -158,17 +187,37 @@ export class LobbyGateway
   }
 
   /**
-   * Extracts the JWT token from the WebSocket connection handshake.
-   * @param socket - The WebSocket client.
-   * @returns The extracted token.
-   * @throws WsException if no token is found.
+   * Handles request rejection messages
+   * @param socket - The responding client's socket
+   * @param data - Rejection payload
+   * @throws WsException if user is not the lobby owner
+   */
+  @SubscribeMessage('reject-request')
+  @UsePipes(new ZodValidationPipe(requestResponseSchema))
+  handleRejectRequest(
+    @ConnectedSocket() socket: AuthenticatedSocket,
+    @MessageBody() data: RequestResponseDto,
+  ): void {
+    if (socket.user.lobbyId !== data.lobbyId) {
+      throw new WsException('Only lobby owner can respond to requests');
+    }
+    this.notifyUserRequestUpdate(data.userId, data.lobbyId, 'rejected');
+  }
+
+  /**
+   * Extracts JWT token from socket connection
+   * @param socket - The connected socket
+   * @returns The extracted token
+   * @throws WsException if no token found
    */
   private extractToken(socket: AuthenticatedSocket): string {
+    // Check handshake auth first
     const { token: handshakeToken } = socket.handshake.auth;
     if (handshakeToken && typeof handshakeToken === 'string') {
       return handshakeToken;
     }
 
+    // Fallback to Authorization header
     const authHeader = socket.handshake.headers['authorization'];
     if (typeof authHeader === 'string') {
       const token = authHeader.split(' ')[1];
@@ -180,11 +229,13 @@ export class LobbyGateway
     throw new WsException('Missing authentication token');
   }
 
+  /* ========== Notification Methods ========== */
+
   /**
-   * Emits a 'join-request' event to all sockets in a lobby.
-   * @param lobbyId - The ID of the lobby.
-   * @param userId - The ID of the user requesting to join.
-   * @param username - The username of the requester.
+   * Notifies lobby owner of new join request
+   * @param lobbyId - Target lobby ID
+   * @param userId - Requesting user ID
+   * @param username - Requesting user's display name
    */
   notifyNewRequest(lobbyId: string, userId: string, username: string): void {
     this.server.to(`lobby-${lobbyId}`).emit('join-request', {
@@ -195,28 +246,71 @@ export class LobbyGateway
   }
 
   /**
-   * Emits a 'request-updated' event to the user whose request was handled.
-   * @param userId - The user ID of the requester.
-   * @param lobbyId - The lobby involved.
-   * @param status - The response status ('accepted' or 'rejected').
+   * Notifies user of their request status update
+   * @param userId - Target user ID
+   * @param lobbyId - Relevant lobby ID
+   * @param status - Update status (accepted/rejected/kicked)
    */
   notifyUserRequestUpdate(
     userId: string,
     lobbyId: string,
-    status: 'accepted' | 'rejected',
+    status: 'accepted' | 'rejected' | 'kicked',
   ): void {
     this.server.to(`user-${userId}`).emit('request-updated', {
       lobbyId,
       status,
       timestamp: new Date().toISOString(),
-      ...(status === 'rejected' && { cooldown: '6h' }),
+      ...(status === 'rejected' && { cooldown: '6h' }), // Add cooldown for rejections
     });
   }
 
   /**
-   * Checks if a user is currently connected via WebSocket.
-   * @param userId - The user ID to check.
-   * @returns True if the user is connected, false otherwise.
+   * Notifies lobby of new member
+   * @param lobbyId - Target lobby ID
+   * @param userId - New member's user ID
+   * @param username - New member's display name
+   */
+  notifyNewMember(lobbyId: string, userId: string, username: string): void {
+    this.server.to(`lobby-${lobbyId}`).emit('member-joined', {
+      userId,
+      username,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * Notifies lobby of member departure
+   * @param lobbyId - Target lobby ID
+   * @param userId - Departing user ID
+   * @param username - Departing user's display name
+   */
+  notifyMemberLeft(lobbyId: string, userId: string, username: string): void {
+    this.server.to(`lobby-${lobbyId}`).emit('member-left', {
+      userId,
+      username,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * Notifies lobby of visibility change
+   * @param lobbyId - Target lobby ID
+   * @param visibility - New visibility setting
+   */
+  notifyVisibilityChange(
+    lobbyId: string,
+    visibility: 'PUBLIC' | 'PRIVATE',
+  ): void {
+    this.server.to(`lobby-${lobbyId}`).emit('visibility-changed', {
+      visibility,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * Checks if a user is currently connected via WebSocket
+   * @param userId - User ID to check
+   * @returns True if user is connected, false otherwise
    */
   isUserConnected(userId: string): boolean {
     return this.connectedUsers.has(userId);
