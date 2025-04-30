@@ -7,6 +7,7 @@ import {
   Post,
   Req,
   UseGuards,
+  Delete,
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { CreateLobbyDto } from './dto/create-lobby.dto';
@@ -15,62 +16,49 @@ import { IsLobbyOwnerGuard } from './guards/is-lobby-owner.guard';
 import { AuthenticatedRequest } from 'src/auth/auth-request.interface';
 import { UpdateLobbyVisibilityDto } from './dto/update-lobby-visibility.dto';
 
-/**
- * Lobby Management Controller
- *
- * Handles all lobby-related operations including:
- * - Lobby creation and joining
- * - Lobby visibility management
- * - Lobby information retrieval
- *
- * All routes are protected by JWT authentication
- */
 @Controller('lobby')
 @UseGuards(JwtAuthGuard)
 export class LobbyController {
   constructor(private readonly lobbyService: LobbyService) {}
 
-  /**
-   * Create a new lobby
-   * @param dto - Lobby creation data (name, visibility, etc.)
-   * @param req - Authenticated request containing user information
-   * @returns The newly created lobby
-   */
   @Post('create')
   createLobby(@Body() dto: CreateLobbyDto, @Req() req: AuthenticatedRequest) {
     return this.lobbyService.createLobby(dto, req.user);
   }
 
-  /**
-   * Join an existing lobby
-   * @param lobbyId - ID of the lobby to join
-   * @param req - Authenticated request containing user information
-   * @returns Updated lobby information
-   */
-  @Post('join/:lobbyId')
-  joinLobby(
+  @Post(':lobbyId/request')
+  createJoinRequest(
     @Param('lobbyId') lobbyId: string,
     @Req() req: AuthenticatedRequest,
   ) {
-    return this.lobbyService.joinLobby(lobbyId, req.user);
+    return this.lobbyService.createJoinRequest(lobbyId, req.user);
   }
 
-  /**
-   * Get the current user's active lobby
-   * @param req - Authenticated request containing user information
-   * @returns The user's current lobby (either owned or joined)
-   */
+  @Patch(':lobbyId/requests/:userId/approve')
+  @UseGuards(IsLobbyOwnerGuard)
+  approveJoinRequest(
+    @Param('lobbyId') lobbyId: string,
+    @Param('userId') userId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.lobbyService.approveJoinRequest(lobbyId, userId, req.user);
+  }
+
+  @Delete(':lobbyId/requests/:userId/reject')
+  @UseGuards(IsLobbyOwnerGuard)
+  rejectJoinRequest(
+    @Param('lobbyId') lobbyId: string,
+    @Param('userId') userId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.lobbyService.rejectJoinRequest(lobbyId, userId, req.user);
+  }
+
   @Get('/myLobby')
   getMyLobby(@Req() req: AuthenticatedRequest) {
     return this.lobbyService.getMyLobby(req.user);
   }
 
-  /**
-   * Get lobby details by ID
-   * @param lobbyId - ID of the lobby to retrieve
-   * @param req - Authenticated request for permission verification
-   * @returns Detailed lobby information
-   */
   @Get('/:lobbyId')
   getLobby(
     @Param('lobbyId') lobbyId: string,
@@ -79,15 +67,6 @@ export class LobbyController {
     return this.lobbyService.getLobby(lobbyId, req.user);
   }
 
-  /**
-   * Update lobby visibility (public/private)
-   * @param lobbyId - ID of the lobby to modify
-   * @param dto - Visibility update data
-   * @param req - Authenticated request (must be lobby owner)
-   * @returns Updated lobby information
-   *
-   * @protected Requires lobby ownership (enforced by IsLobbyOwnerGuard)
-   */
   @Patch('/:lobbyId/visibility')
   @UseGuards(JwtAuthGuard, IsLobbyOwnerGuard)
   updateLobbyVisibility(
@@ -100,5 +79,20 @@ export class LobbyController {
       req.user,
       dto.visibility,
     );
+  }
+
+  @Post('leave')
+  leaveLobby(@Req() req: AuthenticatedRequest) {
+    return this.lobbyService.leaveLobby(req.user);
+  }
+
+  @Delete(':lobbyId/members/:userId')
+  @UseGuards(JwtAuthGuard, IsLobbyOwnerGuard)
+  kickMember(
+    @Param('lobbyId') lobbyId: string,
+    @Param('userId') userId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.lobbyService.kickMember(lobbyId, userId, req.user);
   }
 }
