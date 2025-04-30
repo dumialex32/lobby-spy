@@ -20,19 +20,27 @@ enum LobbyVisibility {
   PRIVATE
 }
 
+// Join lobby request status
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Lobby {
-  id          String          @id @default(uuid())
-  name        String
-  imageUrl    String?
-  description String
-  visibility  LobbyVisibility @default(PUBLIC)
-  capacity    Int             @default(30)
-  ownerId     String          @unique
-  owner       User            @relation("LobbyOwner", fields: [ownerId], references: [id])
-  members     User[]          @relation("LobbyMembers")
-  games       LobbyGame[]
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id               String             @id @default(uuid())
+  name             String
+  imageUrl         String?
+  description      String
+  visibility       LobbyVisibility    @default(PUBLIC)
+  capacity         Int                @default(30)
+  ownerId          String             @unique
+  owner            User               @relation("LobbyOwner", fields: [ownerId], references: [id])
+  members          User[]             @relation("LobbyMembers")
+  games            LobbyGame[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  LobbyJoinRequest LobbyJoinRequest[]
 }
 
 // User models
@@ -55,9 +63,22 @@ model User {
   // owner of a lobby
   lobby Lobby? @relation("LobbyOwner") // it might own or not own a lobby group
 
-  role      UserRole @default(MEMBER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  role             UserRole           @default(MEMBER)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  LobbyJoinRequest LobbyJoinRequest[]
+}
+
+model LobbyJoinRequest {
+  id        String        @id @default(uuid())
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+  lobbyId   String
+  lobby     Lobby         @relation(fields: [lobbyId], references: [id])
+  status    RequestStatus @default(PENDING)
+  createdAt DateTime      @default(now())
+
+  @@unique([userId, lobbyId]) // Prevent duplicate requests
 }
 
 // Replay parsing data models
