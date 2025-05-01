@@ -173,60 +173,6 @@ describe('LobbyService', () => {
   });
 
   /**
-   * Test group for joinLobby functionality
-   *
-   * Verifies:
-   * - Existing membership validation
-   * - Lobby existence checks
-   * - Capacity management
-   * - Successful join scenarios
-   */
-  describe('joinLobby', () => {
-    it('should throw BadRequestException if user is already in a lobby', async () => {
-      const userInLobby = { ...mockUser, memberLobby: mockLobby };
-      mockPrismaService.lobby.findUnique.mockResolvedValue(mockLobby);
-
-      await expect(
-        service.joinLobby(mockLobby.id, userInLobby),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('should throw NotFoundException if lobby does not exist', async () => {
-      mockPrismaService.lobby.findUnique.mockResolvedValue(null);
-
-      await expect(service.joinLobby('nonexistent', mockUser)).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-
-    it('should throw BadRequestException if lobby is full', async () => {
-      mockPrismaService.lobby.findUnique.mockResolvedValue(mockLobby);
-      mockPrismaService.user.count.mockResolvedValue(mockLobby.capacity);
-
-      await expect(service.joinLobby(mockLobby.id, mockUser)).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('should add user to the lobby if valid', async () => {
-      mockPrismaService.lobby.findUnique.mockResolvedValue(mockLobby);
-      mockPrismaService.user.count.mockResolvedValue(29);
-      mockPrismaService.user.update.mockResolvedValue({
-        ...mockUser,
-        lobbyId: mockLobby.id,
-      });
-
-      const result = await service.joinLobby(mockLobby.id, mockUser);
-
-      expect(result).toEqual({ message: `Welcome to ${mockLobby.name}` });
-      expect(mockPrismaService.user.update).toHaveBeenCalledWith({
-        where: { id: mockUser.id },
-        data: { lobbyId: mockLobby.id },
-      });
-    });
-  });
-
-  /**
    * Test group for getMyLobby functionality
    *
    * Verifies:

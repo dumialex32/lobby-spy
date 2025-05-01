@@ -1,12 +1,19 @@
 import { Controller, Get } from '@nestjs/common';
-import { AppService } from './app.service';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller()
 export class AppController {
-  constructor(private readonly appService: AppService) {}
-
   @Get()
   getHello(): string {
-    return this.appService.getHello();
+    return 'Hello World!';
+  }
+
+  @Get('rate-test')
+  @Throttle(3, 60) // 3 requests per minute
+  rateTest() {
+    return {
+      message: 'This is a rate limited endpoint',
+      timestamp: new Date().toISOString(),
+    };
   }
 }

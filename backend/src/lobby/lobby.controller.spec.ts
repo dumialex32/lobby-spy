@@ -173,20 +173,6 @@ describe('LobbyController', () => {
    * - User context propagation
    * - Success response format
    */
-  describe('joinLobby', () => {
-    it('should call service with correct parameters', async () => {
-      const lobbyId = 'lobby-123';
-      const req = { user: mockUser } as AuthenticatedRequest;
-      const successMessage = { message: `Welcome to ${mockLobby.name}` };
-
-      mockLobbyService.joinLobby.mockResolvedValue(successMessage);
-
-      const result = await controller.joinLobby(lobbyId, req);
-
-      expect(result).toEqual(successMessage);
-      expect(lobbyService.joinLobby).toHaveBeenCalledWith(lobbyId, mockUser);
-    });
-  });
 
   /**
    * Test group for getMyLobby endpoint

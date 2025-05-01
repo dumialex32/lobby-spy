@@ -34,6 +34,14 @@ export class LobbyController {
     return this.lobbyService.createJoinRequest(lobbyId, req.user);
   }
 
+  @Delete(':lobbyId/request')
+  cancelJoinRequest(
+    @Param('lobbyId') lobbyId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.lobbyService.cancelJoinRequest(lobbyId, req.user);
+  }
+
   @Patch(':lobbyId/requests/:userId/approve')
   @UseGuards(IsLobbyOwnerGuard)
   approveJoinRequest(
@@ -52,6 +60,15 @@ export class LobbyController {
     @Req() req: AuthenticatedRequest,
   ) {
     return this.lobbyService.rejectJoinRequest(lobbyId, userId, req.user);
+  }
+
+  @Get(':lobbyId/pending-requests')
+  @UseGuards(IsLobbyOwnerGuard)
+  getPendingRequests(
+    @Param('lobbyId') lobbyId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.lobbyService.getPendingRequests(lobbyId, req.user);
   }
 
   @Get('/myLobby')

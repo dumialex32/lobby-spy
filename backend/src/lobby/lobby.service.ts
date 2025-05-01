@@ -22,6 +22,22 @@ export class LobbyService {
     private readonly lobbyGateway: LobbyGateway,
   ) {}
 
+  private async getLobbyById(lobbyId: string) {
+    const lobby = await this.prismaService.lobby.findUnique({
+      where: { id: lobbyId },
+      include: {
+        owner: true,
+        members: true,
+      },
+    });
+
+    if (!lobby) {
+      throw new NotFoundException('Lobby not found');
+    }
+
+    return lobby;
+  }
+
   async createLobby(dto: CreateLobbyDto, user: UserWithLobbyRelations) {
     if (user.memberLobby) {
       throw new ForbiddenException(
@@ -65,13 +81,20 @@ export class LobbyService {
   }
 
   async createJoinRequest(lobbyId: string, user: UserWithLobbyRelations) {
-    const lobby = await this.prismaService.lobby.findUnique({
-      where: { id: lobbyId },
-    });
+    // Check if user already has any pending request
+    const existingAnyRequest =
+      await this.prismaService.lobbyJoinRequest.findFirst({
+        where: { userId: user.id },
+      });
 
-    if (!lobby) {
-      throw new NotFoundException('Lobby not found');
+    if (existingAnyRequest) {
+      throw new BadRequestException(
+        'You already have a pending request to another lobby',
+      );
     }
+
+    // Check if lobby exist and throws, if not
+    const lobby = await this.getLobbyById(lobbyId);
 
     if (user.memberLobby) {
       throw new BadRequestException('You are already a member of a lobby');
@@ -93,7 +116,6 @@ export class LobbyService {
       );
     }
 
-    // Remove the unused request variable assignment
     await this.prismaService.lobbyJoinRequest.create({
       data: {
         userId: user.id,
@@ -114,21 +136,43 @@ export class LobbyService {
     };
   }
 
+  async cancelJoinRequest(lobbyId: string, user: UserWithLobbyRelations) {
+    // Check if lobby exist and throws, if not
+
+    const lobby = await this.getLobbyById(lobbyId);
+
+    await this.prismaService.lobbyJoinRequest.delete({
+      where: {
+        userId_lobbyId: {
+          userId: user.id,
+          lobbyId: lobby.id,
+        },
+      },
+    });
+
+    if (this.lobbyGateway.isUserConnected(lobby.ownerId)) {
+      this.lobbyGateway.notifyRequestCancelled(lobby.id, user.id);
+    }
+
+    return { message: 'Join request has been cancelled' };
+  }
+
   async approveJoinRequest(
     lobbyId: string,
     userId: string,
     owner: UserWithLobbyRelations,
   ) {
-    const lobby = await this.prismaService.lobby.findUnique({
-      where: { id: lobbyId },
-    });
+    // Check if lobby exist and throws, if not
 
-    if (!lobby) {
-      throw new NotFoundException('Lobby not found');
-    }
+    const lobby = await this.getLobbyById(lobbyId);
 
     if (lobby.ownerId !== owner.id) {
       throw new ForbiddenException('Only the owner can approve join requests');
+    }
+
+    // Check lobby capacity
+    if (lobby.members.length >= lobby.capacity) {
+      throw new BadRequestException('Lobby has reached maximum capacity');
     }
 
     const request = await this.prismaService.lobbyJoinRequest.findUnique({
@@ -184,13 +228,9 @@ export class LobbyService {
     userId: string,
     owner: UserWithLobbyRelations,
   ) {
-    const lobby = await this.prismaService.lobby.findUnique({
-      where: { id: lobbyId },
-    });
+    // Check if lobby exist and throws, if not
 
-    if (!lobby) {
-      throw new NotFoundException('Lobby not found');
-    }
+    const lobby = await this.getLobbyById(lobbyId);
 
     if (lobby.ownerId !== owner.id) {
       throw new ForbiddenException('Only the owner can reject join requests');
@@ -223,6 +263,29 @@ export class LobbyService {
     }
 
     return { message: 'Join request has been rejected' };
+  }
+
+  async getPendingRequests(lobbyId: string, user: UserWithLobbyRelations) {
+    // Check if lobby exist and throws, if not
+    const lobby = await this.getLobbyById(lobbyId);
+
+    if (lobby.ownerId !== user.id) {
+      throw new ForbiddenException('Only the owner can view pending requests');
+    }
+
+    return this.prismaService.lobbyJoinRequest.findMany({
+      where: { lobbyId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            avatar: true,
+            steamId: true,
+          },
+        },
+      },
+    });
   }
 
   async getMyLobby(user: UserWithLobbyRelations) {
@@ -272,13 +335,9 @@ export class LobbyService {
     user: UserWithLobbyRelations,
     visibility: 'PRIVATE' | 'PUBLIC',
   ) {
-    const lobby = await this.prismaService.lobby.findUnique({
-      where: { id: lobbyId },
-    });
+    // Check if lobby exist and throws, if not
 
-    if (!lobby) {
-      throw new NotFoundException('Lobby not found');
-    }
+    const lobby = await this.getLobbyById(lobbyId);
 
     if (lobby.ownerId !== user.id) {
       throw new ForbiddenException(
@@ -322,13 +381,9 @@ export class LobbyService {
     userId: string,
     owner: UserWithLobbyRelations,
   ) {
-    const lobby = await this.prismaService.lobby.findUnique({
-      where: { id: lobbyId },
-    });
+    // Check if lobby exist and throws, if not
 
-    if (!lobby) {
-      throw new NotFoundException('Lobby not found');
-    }
+    const lobby = await this.getLobbyById(lobbyId);
 
     if (lobby.ownerId !== owner.id) {
       throw new ForbiddenException('Only the owner can kick members');

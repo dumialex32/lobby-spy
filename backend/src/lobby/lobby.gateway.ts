@@ -246,6 +246,17 @@ export class LobbyGateway
   }
 
   /**
+   * Notifies cancel request by the user
+   */
+
+  notifyRequestCancelled(lobbyId: string, userId: string): void {
+    this.server.to(`lobby-${lobbyId}`).emit('request-cancelled', {
+      userId,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  /**
    * Notifies user of their request status update
    * @param userId - Target user ID
    * @param lobbyId - Relevant lobby ID
