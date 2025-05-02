@@ -10,6 +10,7 @@ import { RedisThrottlerStorage } from './throttler/redis-throttler.storage';
 import { RedisModule } from './redis/redis.module';
 import { throttlerConfig } from './throttler/throttler.config';
 import { HealthModule } from './health/health.module';
+import { MetricsModule } from './metrics/metrics.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { HealthModule } from './health/health.module';
     ReplayModule,
     LobbyModule,
     HealthModule,
+    MetricsModule,
   ],
   providers: [
     {

@@ -5,9 +5,10 @@ import { HealthService } from './health.service';
 import { HealthCheckResponseDto } from './dto/health-response.dto';
 
 /**
- * Health check API endpoints
- * @controller
- * @tag System Health
+ * Health Check Controller
+ * @description Exposes endpoints for system health monitoring
+ * @class {HealthController}
+ * @public
  */
 @Controller('health')
 @ApiTags('System Health')
@@ -16,9 +17,9 @@ export class HealthController {
 
   /**
    * Basic health check endpoint
-   * @summary Verify essential services
-   * @description Checks API, database, and Redis connectivity
+   * @description Verifies essential services (API, Database, Redis)
    * @returns {Promise<HealthCheckResponseDto>} Health status
+   * @public
    */
   @Get()
   @HealthCheck()
@@ -42,9 +43,9 @@ export class HealthController {
 
   /**
    * Detailed system check endpoint
-   * @summary Comprehensive system check
-   * @description Verifies system resources and dependencies
+   * @description Comprehensive health check including system resources
    * @returns {Promise<HealthCheckResponseDto>} Detailed health status
+   * @public
    */
   @Get('detailed')
   @HealthCheck()

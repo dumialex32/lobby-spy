@@ -2,26 +2,34 @@ import { ApiProperty } from '@nestjs/swagger';
 
 /**
  * System health status values
- * @enum {string}
- * @property {string} UP - System is healthy
- * @property {string} DOWN - Critical failure detected
- * @property {string} WARNING - Non-critical issues present
+ * @enum {HealthStatus}
  */
 export enum HealthStatus {
+  /**
+   * System is healthy and functioning normally
+   */
   UP = 'up',
+
+  /**
+   * Critical failure affecting system functionality
+   */
   DOWN = 'down',
+
+  /**
+   * Non-critical issues that may affect performance
+   */
   WARNING = 'warning',
 }
 
 /**
- * Health check response format
- * @class
- * @property {HealthStatus} status - Overall system status
- * @property {Record<string, any>} details - Component status details
- * @property {Record<string, any>} errors - Error information for failed components
- * @property {string[]} [warnings] - Optional warning messages
+ * Standardized health check response format
+ * @class {HealthCheckResponseDto}
  */
 export class HealthCheckResponseDto {
+  /**
+   * Aggregated system status
+   * @example HealthStatus.UP
+   */
   @ApiProperty({
     enum: HealthStatus,
     example: HealthStatus.UP,
@@ -29,6 +37,10 @@ export class HealthCheckResponseDto {
   })
   status: HealthStatus;
 
+  /**
+   * Detailed status of each monitored component
+   * @example { database: { status: HealthStatus.UP, responseTime: '45ms' } }
+   */
   @ApiProperty({
     description: 'Detailed status of each monitored component',
     example: {
@@ -40,6 +52,10 @@ export class HealthCheckResponseDto {
   })
   details: Record<string, any>;
 
+  /**
+   * Error details for failed components
+   * @example { redis: { status: HealthStatus.DOWN, error: 'Connection timeout' } }
+   */
   @ApiProperty({
     description: 'Error details for failed components',
     example: {
@@ -51,6 +67,10 @@ export class HealthCheckResponseDto {
   })
   errors: Record<string, any>;
 
+  /**
+   * Non-critical warning messages
+   * @example ['database:version_mismatch']
+   */
   @ApiProperty({
     description: 'Non-critical warning messages',
     required: false,

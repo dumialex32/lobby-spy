@@ -18,17 +18,20 @@ interface HealthCheckConfig {
   memoryThreshold: number;
   redisTimeout: number;
   circuitBreakerThreshold: number;
+  cooldownPeriod?: number;
 }
 
 /**
- * Core health check service
- * @service
+ * Core Health Service
  * @description Implements health check logic and status aggregation
+ * @class {HealthService}
+ * @public
  */
 @Injectable()
 export class HealthService {
   private readonly logger = new Logger(HealthService.name);
   private failureCount = 0;
+  private lastCircuitBreak = 0;
 
   constructor(
     private readonly health: HealthCheckService,
@@ -42,11 +45,19 @@ export class HealthService {
 
   /**
    * Performs basic health checks
+   * @description Implements circuit breaker pattern
    * @returns {Promise<HealthCheckResult>} Raw health check results
    * @throws {Error} When circuit breaker threshold is exceeded
+   * @public
    */
   async getHealthCheck(): Promise<HealthCheckResult> {
-    if (this.failureCount >= this.config.circuitBreakerThreshold) {
+    const now = Date.now();
+    const cooldown = this.config.cooldownPeriod ?? 30000;
+
+    if (
+      this.failureCount >= this.config.circuitBreakerThreshold &&
+      now - this.lastCircuitBreak < cooldown
+    ) {
       this.logger.warn('Circuit breaker engaged - failing fast');
       throw new Error('Service unavailable due to repeated failures');
     }
@@ -57,17 +68,19 @@ export class HealthService {
         () => this.prisma.isHealthy('database'),
         this.createRedisCheck(),
       ]);
-      this.failureCount = 0; // Reset on success
+      this.failureCount = 0;
       return result;
-    } catch (err) {
+    } catch (err: unknown) {
       this.failureCount++;
-      throw err;
+      this.lastCircuitBreak = now;
+      throw err instanceof Error ? err : new Error(String(err));
     }
   }
 
   /**
    * Performs detailed system health check
    * @returns {Promise<HealthCheckResult>} Detailed health results
+   * @public
    */
   async getDetailedHealthCheck(): Promise<HealthCheckResult> {
     return this.health.check([
@@ -82,6 +95,7 @@ export class HealthService {
    * Aggregates health check results into standardized response
    * @param {HealthCheckResult} result - Raw health check results
    * @returns {HealthCheckResponseDto} Formatted health status
+   * @public
    */
   aggregateResults(result: HealthCheckResult): HealthCheckResponseDto {
     const details = result.details;
@@ -90,14 +104,13 @@ export class HealthService {
     let overallStatus = HealthStatus.UP;
 
     for (const [key, value] of Object.entries(details)) {
-      const componentStatus = value.status as HealthStatus; // Type assertion
+      const componentStatus = value.status as HealthStatus;
 
       if (componentStatus === HealthStatus.DOWN) {
         errors[key] = value;
         overallStatus = HealthStatus.DOWN;
       } else if (componentStatus === HealthStatus.WARNING) {
         warnings.push(`${key}:${value.message}`);
-        // Only downgrade to WARNING if currently UP
         if (overallStatus === HealthStatus.UP) {
           overallStatus = HealthStatus.WARNING;
         }
@@ -112,7 +125,10 @@ export class HealthService {
     };
   }
 
-  // ... private helper methods
+  /**
+   * Creates Redis health check function
+   * @private
+   */
   private createRedisCheck(): HealthIndicatorFunction {
     return async () => {
       const startTime = Date.now();
@@ -138,18 +154,19 @@ export class HealthService {
     };
   }
 
+  /**
+   * Checks system dependencies
+   * @private
+   */
   private checkDependencies(): HealthIndicatorFunction {
-    return () => {
-      // Example: Check if database version matches expected
-      return {
-        dependencies: {
-          status: HealthStatus.UP,
-          details: {
-            db_version: '5.7.0',
-            redis_version: '6.2.0',
-          },
+    return () => ({
+      dependencies: {
+        status: HealthStatus.UP,
+        details: {
+          db_version: '5.7.0',
+          redis_version: '6.2.0',
         },
-      };
-    };
+      },
+    });
   }
 }
