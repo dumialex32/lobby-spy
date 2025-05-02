@@ -9,6 +9,11 @@ import { PrismaHealthIndicator } from './prisma.health';
 import { HealthService } from './health.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
+/**
+ * Health check module configuration
+ * @module
+ * @description Configures health monitoring endpoints and dependencies
+ */
 @Module({
   imports: [
     TerminusModule,

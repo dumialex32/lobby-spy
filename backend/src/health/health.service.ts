@@ -20,6 +20,11 @@ interface HealthCheckConfig {
   circuitBreakerThreshold: number;
 }
 
+/**
+ * Core health check service
+ * @service
+ * @description Implements health check logic and status aggregation
+ */
 @Injectable()
 export class HealthService {
   private readonly logger = new Logger(HealthService.name);
@@ -35,6 +40,11 @@ export class HealthService {
     private readonly config: HealthCheckConfig,
   ) {}
 
+  /**
+   * Performs basic health checks
+   * @returns {Promise<HealthCheckResult>} Raw health check results
+   * @throws {Error} When circuit breaker threshold is exceeded
+   */
   async getHealthCheck(): Promise<HealthCheckResult> {
     if (this.failureCount >= this.config.circuitBreakerThreshold) {
       this.logger.warn('Circuit breaker engaged - failing fast');
@@ -55,6 +65,10 @@ export class HealthService {
     }
   }
 
+  /**
+   * Performs detailed system health check
+   * @returns {Promise<HealthCheckResult>} Detailed health results
+   */
   async getDetailedHealthCheck(): Promise<HealthCheckResult> {
     return this.health.check([
       () => this.prisma.isHealthy('database'),
@@ -64,6 +78,11 @@ export class HealthService {
     ]);
   }
 
+  /**
+   * Aggregates health check results into standardized response
+   * @param {HealthCheckResult} result - Raw health check results
+   * @returns {HealthCheckResponseDto} Formatted health status
+   */
   aggregateResults(result: HealthCheckResult): HealthCheckResponseDto {
     const details = result.details;
     const errors: Record<string, any> = {};
@@ -93,6 +112,7 @@ export class HealthService {
     };
   }
 
+  // ... private helper methods
   private createRedisCheck(): HealthIndicatorFunction {
     return async () => {
       const startTime = Date.now();

@@ -1,21 +1,60 @@
 import { ApiProperty } from '@nestjs/swagger';
 
+/**
+ * System health status values
+ * @enum {string}
+ * @property {string} UP - System is healthy
+ * @property {string} DOWN - Critical failure detected
+ * @property {string} WARNING - Non-critical issues present
+ */
+export enum HealthStatus {
+  UP = 'up',
+  DOWN = 'down',
+  WARNING = 'warning',
+}
+
+/**
+ * Health check response format
+ * @class
+ * @property {HealthStatus} status - Overall system status
+ * @property {Record<string, any>} details - Component status details
+ * @property {Record<string, any>} errors - Error information for failed components
+ * @property {string[]} [warnings] - Optional warning messages
+ */
 export class HealthCheckResponseDto {
-  @ApiProperty({ example: 'up', description: 'Overall status' })
-  status: string;
+  @ApiProperty({
+    enum: HealthStatus,
+    example: HealthStatus.UP,
+    description: 'Aggregated system status (UP/DOWN/WARNING)',
+  })
+  status: HealthStatus;
 
   @ApiProperty({
+    description: 'Detailed status of each monitored component',
     example: {
-      api: { status: 'up', responseTime: '32ms' },
-      database: { status: 'up', responseTime: '45ms' },
+      database: {
+        status: HealthStatus.UP,
+        responseTime: '45ms',
+      },
     },
-    description: 'Details of each service',
   })
   details: Record<string, any>;
 
   @ApiProperty({
-    example: {},
-    description: 'Error information if any service is down',
+    description: 'Error details for failed components',
+    example: {
+      redis: {
+        status: HealthStatus.DOWN,
+        error: 'Connection timeout',
+      },
+    },
   })
-  error: Record<string, any>;
+  errors: Record<string, any>;
+
+  @ApiProperty({
+    description: 'Non-critical warning messages',
+    required: false,
+    example: ['database:version_mismatch'],
+  })
+  warnings?: string[];
 }

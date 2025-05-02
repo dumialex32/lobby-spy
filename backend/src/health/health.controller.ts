@@ -2,33 +2,50 @@ import { Controller, Get } from '@nestjs/common';
 import { HealthCheck } from '@nestjs/terminus';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { HealthService } from './health.service';
-import { HealthCheckResponseDto } from './dto/health-response.dto'; // Removed HealthStatus import
+import { HealthCheckResponseDto } from './dto/health-response.dto';
 
+/**
+ * Health check API endpoints
+ * @controller
+ * @tag System Health
+ */
 @Controller('health')
 @ApiTags('System Health')
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
+  /**
+   * Basic health check endpoint
+   * @summary Verify essential services
+   * @description Checks API, database, and Redis connectivity
+   * @returns {Promise<HealthCheckResponseDto>} Health status
+   */
   @Get()
   @HealthCheck()
   @ApiOperation({
     summary: 'Basic Health Check',
-    description: 'Checks essential services (API, Database, Redis)',
+    description: 'Verifies essential services (API, Database, Redis)',
   })
   @ApiResponse({
     status: 200,
-    description: 'Health status with basic service checks',
+    description: 'System is operational',
     type: HealthCheckResponseDto,
   })
   @ApiResponse({
     status: 503,
-    description: 'Service unavailable when critical components are down',
+    description: 'Service unavailable - critical components down',
   })
   async check(): Promise<HealthCheckResponseDto> {
     const result = await this.healthService.getHealthCheck();
     return this.healthService.aggregateResults(result);
   }
 
+  /**
+   * Detailed system check endpoint
+   * @summary Comprehensive system check
+   * @description Verifies system resources and dependencies
+   * @returns {Promise<HealthCheckResponseDto>} Detailed health status
+   */
   @Get('detailed')
   @HealthCheck()
   @ApiOperation({
@@ -37,7 +54,7 @@ export class HealthController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Detailed system health status',
+    description: 'Detailed system status',
     type: HealthCheckResponseDto,
   })
   async detailedCheck(): Promise<HealthCheckResponseDto> {
