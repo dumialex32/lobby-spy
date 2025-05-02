@@ -1,34 +1,47 @@
 import { Controller, Get } from '@nestjs/common';
-import { HealthCheck, HealthCheckResult } from '@nestjs/terminus'; // Corrected import
-import { ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { HealthCheck } from '@nestjs/terminus';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { HealthService } from './health.service';
-import { HealthCheckResponseDto } from './dto/health-response.dto';
+import { HealthCheckResponseDto } from './dto/health-response.dto'; // Removed HealthStatus import
 
 @Controller('health')
+@ApiTags('System Health')
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
   @Get()
   @HealthCheck()
-  @ApiOperation({ summary: 'Basic service health check' })
+  @ApiOperation({
+    summary: 'Basic Health Check',
+    description: 'Checks essential services (API, Database, Redis)',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Health status',
+    description: 'Health status with basic service checks',
     type: HealthCheckResponseDto,
   })
-  async check(): Promise<HealthCheckResult> {
-    return this.healthService.getHealthCheck();
+  @ApiResponse({
+    status: 503,
+    description: 'Service unavailable when critical components are down',
+  })
+  async check(): Promise<HealthCheckResponseDto> {
+    const result = await this.healthService.getHealthCheck();
+    return this.healthService.aggregateResults(result);
   }
 
   @Get('detailed')
   @HealthCheck()
-  @ApiOperation({ summary: 'Detailed system health check' })
+  @ApiOperation({
+    summary: 'Detailed System Check',
+    description: 'Comprehensive health check including system resources',
+  })
   @ApiResponse({
     status: 200,
-    description: 'Detailed health status',
+    description: 'Detailed system health status',
     type: HealthCheckResponseDto,
   })
-  async detailedCheck(): Promise<HealthCheckResult> {
-    return this.healthService.getDetailedHealthCheck();
+  async detailedCheck(): Promise<HealthCheckResponseDto> {
+    const result = await this.healthService.getDetailedHealthCheck();
+    return this.healthService.aggregateResults(result);
   }
 }
