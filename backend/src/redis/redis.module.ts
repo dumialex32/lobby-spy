@@ -4,6 +4,13 @@ import { RedisProvider } from './redis.provider';
 import { REDIS_CLIENT } from './redis.constants';
 import { RedisThrottlerStorage } from '../throttler/redis-throttler.storage';
 
+/**
+ * RedisModule handles Redis client instantiation and configuration,
+ * including cluster support and custom providers.
+ *
+ * Exposes RedisProvider, RedisThrottlerStorage, and the raw Redis client
+ * through DI for usage across the application.
+ */
 @Module({
   imports: [ConfigModule],
   providers: [

@@ -2,6 +2,11 @@ import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis, { Cluster } from 'ioredis';
 
+/**
+ * RedisProvider is responsible for initializing and managing a Redis client.
+ * Supports both standalone and clustered Redis deployments.
+ * Handles lifecycle events and logs Redis connection status.
+ */
 @Injectable()
 export class RedisProvider implements OnApplicationShutdown {
   private readonly logger = new Logger(RedisProvider.name);
@@ -29,7 +34,7 @@ export class RedisProvider implements OnApplicationShutdown {
       },
     };
 
-    // Support for Redis Cluster if configured
+    // Initialize Redis client depending on cluster mode
     this.isCluster = this.configService.get<boolean>('REDIS_CLUSTER', false);
     if (this.isCluster) {
       this.client = new Cluster(
@@ -46,6 +51,9 @@ export class RedisProvider implements OnApplicationShutdown {
     this.setupEventListeners();
   }
 
+  /**
+   * Sets up Redis client event listeners for debugging and observability.
+   */
   private setupEventListeners() {
     this.client.on('connect', () =>
       this.logger.log('Redis connection established'),
@@ -61,10 +69,17 @@ export class RedisProvider implements OnApplicationShutdown {
     this.client.on('end', () => this.logger.warn('Redis connection ended'));
   }
 
+  /**
+   * Returns the internal Redis client instance for direct usage.
+   */
   getClient(): Redis | Cluster {
     return this.client;
   }
 
+  /**
+   * Executes a simple ping to Redis to verify availability.
+   * Throws an error if Redis is not responsive.
+   */
   async ping(): Promise<string> {
     try {
       return await this.client.ping();
@@ -74,6 +89,9 @@ export class RedisProvider implements OnApplicationShutdown {
     }
   }
 
+  /**
+   * Gracefully closes the Redis connection on application shutdown.
+   */
   async onApplicationShutdown() {
     try {
       await this.client.quit();

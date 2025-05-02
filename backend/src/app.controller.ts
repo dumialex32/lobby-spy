@@ -9,8 +9,8 @@ export class AppController {
   }
 
   @Get('rate-test')
-  @Throttle(3, 60) // 3 requests per minute
-  rateTest() {
+  @Throttle({ default: { limit: 3, ttl: 60 } })
+  rateTest(): { message: string; timestamp: string } {
     return {
       message: 'This is a rate limited endpoint',
       timestamp: new Date().toISOString(),
