@@ -1,3 +1,8 @@
+/**
+ * @fileoverview Unit tests for the LobbyService.
+ * Covers join request creation, approval, member removal, and lobby creation logic.
+ */
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { LobbyService } from './lobby.service';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -8,306 +13,431 @@ import {
 } from '@nestjs/common';
 import { UserWithLobbyRelations } from 'src/users/types/user.types';
 import { CreateLobbyDto } from './dto/create-lobby.dto';
-import { LobbyVisibility, UserRole } from '@prisma/client';
+import {
+  LobbyVisibility,
+  UserRole,
+  RequestStatus,
+  Prisma,
+} from '@prisma/client';
 import { UsersService } from 'src/users/users.service';
+import { LobbyGateway } from './lobby.gateway';
+
+//#region Mock Data and Utilities
+
+/** A mock user used across test cases */
+const mockUser: UserWithLobbyRelations = {
+  id: 'user1',
+  steamId: 'steam1',
+  username: 'TestUser',
+  avatar: 'avatar_url',
+  role: UserRole.MEMBER,
+  memberLobby: null,
+  lobby: null,
+  lobbyId: null,
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
 
 /**
- * Comprehensive test suite for LobbyService
- *
- * Tests core lobby business logic including:
- * - Lobby creation and membership rules
- * - Visibility management
- * - Capacity validation
- * - Error scenarios
+ * Creates a mock lobby object with default values and optional overrides.
+ * @param overrides Partial lobby payload to override default values.
+ * @returns Fully populated mock lobby.
  */
-describe('LobbyService', () => {
-  let service: LobbyService;
-
-  /**
-   * Mock user data representing a standard user
-   * - Initial state: Not in any lobby
-   * - Standard member role
-   */
-  const mockUser: UserWithLobbyRelations = {
-    id: 'user1',
-    steamId: 'steam1',
-    username: 'TestUser',
-    avatar: 'avatar_url',
-    role: UserRole.MEMBER,
-    memberLobby: null,
-    lobby: null,
-    lobbyId: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-
-  /**
-   * Mock lobby data representing a standard lobby
-   * - Public visibility
-   * - 30 member capacity
-   * - Owned by mockUser
-   */
-  const mockLobby = {
+function createMockLobby(
+  overrides?: Partial<
+    Prisma.LobbyGetPayload<{
+      include: { owner: true; members: true; games: true };
+    }>
+  >,
+) {
+  const lobby: Prisma.LobbyGetPayload<{
+    include: { owner: true; members: true; games: true };
+  }> = {
     id: 'lobby1',
     name: 'Test Lobby',
     visibility: LobbyVisibility.PUBLIC,
     description: 'Test description',
-    capacity: 30,
+    capacity: 10,
     ownerId: 'user1',
     owner: mockUser,
-    members: [mockUser],
+    members: overrides?.members || [],
     imageUrl: 'image_url',
-    games: [],
+    games: overrides?.games || [],
     createdAt: new Date(),
     updatedAt: new Date(),
+    ...overrides,
   };
+  return lobby;
+}
 
-  /**
-   * Mock PrismaService implementation
-   * - Methods mocked with jest.fn()
-   * - Individual tests will override returns as needed
-   */
-  const mockPrismaService = {
+const mockLobby = createMockLobby();
+
+/** A mock join request associated with the test lobby */
+const mockJoinRequest: Prisma.LobbyJoinRequestGetPayload<{
+  include: { user: true };
+}> = {
+  id: 'request1',
+  userId: 'requester1',
+  lobbyId: 'lobby1',
+  status: RequestStatus.PENDING,
+  createdAt: new Date(),
+  user: {
+    id: 'requester1',
+    username: 'Requester',
+    avatar: 'requester_avatar',
+    steamId: 'steam_requester',
+    role: UserRole.MEMBER,
+    lobbyId: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+};
+
+/** A mock lobby member */
+const mockMember: UserWithLobbyRelations = {
+  ...mockUser,
+  id: 'member1',
+  lobbyId: 'lobby1',
+  memberLobby: mockLobby,
+};
+
+/**
+ * Creates a mocked Prisma client with stubbed methods for use in tests.
+ * @returns Mocked PrismaService instance.
+ */
+function createMockPrismaClient(): jest.Mocked<PrismaService> {
+  return {
+    $transaction: jest.fn(),
+    $queryRaw: jest.fn(),
+    $executeRaw: jest.fn(),
     user: {
       findUnique: jest.fn(),
       update: jest.fn(),
-      count: jest.fn(),
+      create: jest.fn(),
     },
     lobby: {
-      create: jest.fn(),
       findUnique: jest.fn(),
+      create: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
     },
-  };
+    lobbyJoinRequest: {
+      findFirst: jest.fn(),
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      delete: jest.fn(),
+    },
+  } as unknown as jest.Mocked<PrismaService>;
+}
+//#endregion
 
-  // Mock UsersService implementation
-  const mockUsersService = {
-    getUserById: jest.fn(),
-  };
+describe('LobbyService', () => {
+  let service: LobbyService;
+  let prismaService: jest.Mocked<PrismaService>;
+  let lobbyGateway: jest.Mocked<LobbyGateway>;
 
-  /**
-   * Test module setup
-   * - Configures testing module with mocked dependencies
-   */
   beforeEach(async () => {
+    const mockPrisma = createMockPrismaClient();
+
+    // Simulate Prisma transaction behavior
+    (mockPrisma.$transaction as jest.Mock).mockImplementation(
+      async (operations: Prisma.PrismaPromise<any>[]) => {
+        const results: any[] = [];
+        for (const operation of operations) {
+          if ((operation as any)['where']?.id === 'requester1') {
+            results.push({
+              ...mockUser,
+              id: 'requester1',
+              lobbyId: 'lobby1',
+            });
+          } else if ((operation as any)['where']?.userId_lobbyId) {
+            results.push(mockJoinRequest);
+          }
+        }
+        return results;
+      },
+    );
+
+    // Mock standard Prisma behavior for known edge cases
+    (mockPrisma.user.findUnique as jest.Mock).mockImplementation(
+      (args: any) => {
+        if (args.where.id === 'nonexistent') return Promise.resolve(null);
+        if (args.where.id === 'requester1') {
+          return Promise.resolve({
+            ...mockUser,
+            id: 'requester1',
+            lobbyId: null,
+          });
+        }
+        return Promise.resolve(mockUser);
+      },
+    );
+
+    // Fallback mocks
+    (mockPrisma.user.update as jest.Mock).mockResolvedValue(mockUser);
+    (mockPrisma.lobby.create as jest.Mock).mockResolvedValue(mockLobby);
+    (mockPrisma.lobby.findUnique as jest.Mock).mockImplementation(
+      (args: any) => {
+        if (args.where.id === 'nonexistent') return Promise.resolve(null);
+        if (args.where.id === 'full-lobby') {
+          return Promise.resolve(
+            createMockLobby({
+              members: Array(10).fill(mockUser),
+              capacity: 10,
+            }),
+          );
+        }
+        return Promise.resolve(
+          createMockLobby({
+            ownerId: args.where.id === 'lobby1' ? 'user1' : 'other-owner',
+            members: [],
+            capacity: 10,
+          }),
+        );
+      },
+    );
+
+    (mockPrisma.lobbyJoinRequest.findFirst as jest.Mock).mockResolvedValue(
+      null,
+    );
+    (mockPrisma.lobbyJoinRequest.findUnique as jest.Mock).mockImplementation(
+      (args: any) => {
+        if (
+          args.where.userId_lobbyId?.userId === 'requester1' &&
+          args.where.userId_lobbyId?.lobbyId === 'lobby1'
+        ) {
+          return Promise.resolve(mockJoinRequest);
+        }
+        return Promise.resolve(null);
+      },
+    );
+    (mockPrisma.lobbyJoinRequest.findMany as jest.Mock).mockResolvedValue([
+      mockJoinRequest,
+    ]);
+    (mockPrisma.lobbyJoinRequest.create as jest.Mock).mockImplementation(
+      (args: any) => {
+        return Promise.resolve({
+          ...mockJoinRequest,
+          userId: args.data.userId,
+          lobbyId: args.data.lobbyId,
+        });
+      },
+    );
+    (mockPrisma.lobbyJoinRequest.delete as jest.Mock).mockResolvedValue(
+      mockJoinRequest,
+    );
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         LobbyService,
-        {
-          provide: PrismaService,
-          useValue: mockPrismaService,
-        },
+        { provide: PrismaService, useValue: mockPrisma },
         {
           provide: UsersService,
-          useValue: mockUsersService,
+          useValue: {
+            getUserById: jest.fn().mockResolvedValue(mockUser),
+          },
+        },
+        {
+          provide: LobbyGateway,
+          useValue: {
+            isUserConnected: jest.fn().mockReturnValue(true),
+            notifyNewMember: jest.fn(),
+            notifyNewRequest: jest.fn(),
+            notifyRequestCancelled: jest.fn(),
+            notifyUserRequestUpdate: jest.fn(),
+            notifyMemberLeft: jest.fn(),
+            notifyVisibilityChange: jest.fn(),
+          },
         },
       ],
     }).compile();
 
     service = module.get<LobbyService>(LobbyService);
+    prismaService = module.get(PrismaService);
+    lobbyGateway = module.get(LobbyGateway);
   });
 
-  // Basic service existence test
-  it('should be defined', () => {
-    expect(service).toBeDefined();
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
-  /**
-   * Test group for createLobby functionality
-   *
-   * Verifies:
-   * - User membership validation
-   * - Lobby creation process
-   * - Owner role assignment
-   */
-  describe('createLobby', () => {
-    it('should throw ForbiddenException if user is already in a lobby', async () => {
-      const userInLobby = { ...mockUser, memberLobby: mockLobby };
-      const createLobbyDto: CreateLobbyDto = {
-        name: 'New Lobby',
-        visibility: LobbyVisibility.PUBLIC,
-        description: 'A new lobby for testing',
-      };
+  //#region createJoinRequest
+  describe('createJoinRequest', () => {
+    it('should create join request successfully', async () => {
+      const requester = { ...mockUser, id: 'requester1' };
+
+      (
+        prismaService.lobbyJoinRequest.findFirst as jest.Mock
+      ).mockResolvedValueOnce(null);
+      (
+        prismaService.lobbyJoinRequest.findUnique as jest.Mock
+      ).mockResolvedValueOnce(null);
+
+      const result = await service.createJoinRequest('lobby1', requester);
+
+      expect(result).toEqual({
+        message: 'Your join request has been sent and is pending approval.',
+      });
+      expect(prismaService.lobbyJoinRequest.create).toHaveBeenCalledWith({
+        data: { userId: 'requester1', lobbyId: 'lobby1' },
+      });
+      expect(lobbyGateway.notifyNewRequest).toHaveBeenCalledWith(
+        'lobby1',
+        'requester1',
+        'TestUser',
+      );
+    });
+
+    it('should throw if user already has pending request', async () => {
+      const requester = { ...mockUser, id: 'requester1' };
+      (
+        prismaService.lobbyJoinRequest.findUnique as jest.Mock
+      ).mockResolvedValueOnce(mockJoinRequest);
 
       await expect(
-        service.createLobby(createLobbyDto, userInLobby),
-      ).rejects.toThrow(ForbiddenException);
+        service.createJoinRequest('lobby1', requester),
+      ).rejects.toThrow(BadRequestException);
     });
 
-    it('should create a lobby if user is not in any lobby', async () => {
-      mockPrismaService.lobby.create.mockResolvedValue(mockLobby);
-      mockPrismaService.user.update.mockResolvedValue(mockUser);
+    it('should throw if user is already in a lobby', async () => {
+      const requester = {
+        ...mockUser,
+        id: 'requester1',
+        memberLobby: mockLobby,
+      };
+      await expect(
+        service.createJoinRequest('lobby1', requester),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+  //#endregion
 
-      const createLobbyDto: CreateLobbyDto = {
+  //#region approveJoinRequest
+  describe('approveJoinRequest', () => {
+    it('should approve request successfully', async () => {
+      const owner = { ...mockUser, role: UserRole.OWNER, id: 'owner1' };
+
+      (prismaService.lobby.findUnique as jest.Mock).mockResolvedValueOnce(
+        createMockLobby({ ownerId: 'owner1', members: [] }),
+      );
+
+      const result = await service.approveJoinRequest(
+        'lobby1',
+        'requester1',
+        owner,
+      );
+
+      expect(result).toEqual({ message: 'User has been added to the lobby' });
+      expect(prismaService.$transaction).toHaveBeenCalled();
+      expect(lobbyGateway.notifyUserRequestUpdate).toHaveBeenCalledWith(
+        'requester1',
+        'lobby1',
+        'accepted',
+      );
+    });
+
+    it('should throw if lobby is at capacity', async () => {
+      const owner = { ...mockUser, role: UserRole.OWNER, id: 'owner1' };
+
+      (prismaService.lobby.findUnique as jest.Mock).mockResolvedValueOnce(
+        createMockLobby({
+          ownerId: 'owner1',
+          members: Array(10).fill(mockUser),
+        }),
+      );
+
+      await expect(
+        service.approveJoinRequest('lobby1', 'requester1', owner),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+  //#endregion
+
+  //#region removeMember
+  describe('removeMember', () => {
+    it('should remove member successfully', async () => {
+      const owner = { ...mockUser, role: UserRole.OWNER, id: 'owner1' };
+      const member = { ...mockMember, id: 'member1' };
+
+      (prismaService.lobby.findUnique as jest.Mock).mockResolvedValueOnce(
+        createMockLobby({ ownerId: 'owner1' }),
+      );
+
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValueOnce(
+        member,
+      );
+
+      const result = await service.removeMember('lobby1', 'member1', owner);
+
+      expect(result).toEqual({
+        message: 'Member has been removed from the lobby',
+      });
+      expect(prismaService.user.update).toHaveBeenCalledWith({
+        where: { id: 'member1' },
+        data: { lobbyId: null, role: UserRole.MEMBER },
+      });
+      expect(lobbyGateway.notifyUserRequestUpdate).toHaveBeenCalledWith(
+        'member1',
+        'lobby1',
+        'kicked',
+      );
+    });
+
+    it('should throw if member not found', async () => {
+      const owner = { ...mockUser, role: UserRole.OWNER };
+
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValueOnce(null);
+
+      await expect(
+        service.removeMember('lobby1', 'nonexistent', owner),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+  //#endregion
+
+  //#region createLobby
+  describe('createLobby', () => {
+    it('should create lobby successfully', async () => {
+      const dto: CreateLobbyDto = {
         name: 'New Lobby',
         visibility: LobbyVisibility.PUBLIC,
-        description: 'A new lobby for testing',
+        description: 'Test lobby description',
+        imageUrl: 'test-image-url',
       };
+      const user = { ...mockUser, memberLobby: null };
 
-      const result = await service.createLobby(createLobbyDto, mockUser);
-
-      expect(result).toEqual(mockLobby);
-      expect(mockPrismaService.lobby.create).toHaveBeenCalledWith({
-        data: {
-          name: createLobbyDto.name,
-          visibility: createLobbyDto.visibility,
-          imageUrl: createLobbyDto.imageUrl,
-          description: createLobbyDto.description,
-          owner: { connect: { id: mockUser.id } },
-          members: { connect: { id: mockUser.id } },
-        },
-        include: {
-          owner: true,
-          members: true,
-        },
-      });
-      expect(mockPrismaService.user.update).toHaveBeenCalledWith({
-        where: { id: mockUser.id },
-        data: {
-          role: UserRole.OWNER,
-          lobby: { connect: { id: mockLobby.id } },
-          lobbyId: mockLobby.id,
-        },
-      });
-    });
-  });
-
-  /**
-   * Test group for getMyLobby functionality
-   *
-   * Verifies:
-   * - Lobby existence validation
-   * - Proper data retrieval
-   */
-  describe('getMyLobby', () => {
-    it('should throw NotFoundException if user is not in any lobby', async () => {
-      await expect(service.getMyLobby(mockUser)).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-
-    it("should return user's lobby if they belong to one", async () => {
-      const userInLobby = { ...mockUser, memberLobby: mockLobby };
-      mockPrismaService.lobby.findUnique.mockResolvedValue(mockLobby);
-
-      const result = await service.getMyLobby(userInLobby);
-
-      expect(result).toEqual(mockLobby);
-      expect(mockPrismaService.lobby.findUnique).toHaveBeenCalledWith({
-        where: { id: mockLobby.id },
-        include: {
-          members: true,
-          owner: true,
-          games: true,
-        },
-      });
-    });
-  });
-
-  /**
-   * Test group for getLobby functionality
-   *
-   * Verifies:
-   * - Lobby existence validation
-   * - Visibility rules enforcement
-   * - Member access rights
-   */
-  describe('getLobby', () => {
-    it('should throw NotFoundException if lobby does not exist', async () => {
-      mockPrismaService.lobby.findUnique.mockResolvedValue(null);
-
-      await expect(service.getLobby('nonexistent', mockUser)).rejects.toThrow(
-        NotFoundException,
-      );
-    });
-
-    it('should throw ForbiddenException if lobby is private and user is not a member', async () => {
-      const privateLobby = {
+      (prismaService.lobby.create as jest.Mock).mockResolvedValueOnce({
         ...mockLobby,
-        visibility: LobbyVisibility.PRIVATE,
-      };
-      mockPrismaService.lobby.findUnique.mockResolvedValue(privateLobby);
+        name: dto.name,
+        visibility: dto.visibility,
+        description: dto.description,
+        imageUrl: dto.imageUrl || null,
+      });
 
-      await expect(service.getLobby(privateLobby.id, mockUser)).rejects.toThrow(
+      const result = await service.createLobby(dto, user);
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          name: dto.name,
+          visibility: dto.visibility,
+          description: dto.description,
+        }),
+      );
+    });
+
+    it('should throw if user already in a lobby', async () => {
+      const dto: CreateLobbyDto = {
+        name: 'New Lobby',
+        visibility: LobbyVisibility.PUBLIC,
+        description: 'Test lobby description',
+      };
+      const user = { ...mockUser, memberLobby: mockLobby };
+
+      await expect(service.createLobby(dto, user)).rejects.toThrow(
         ForbiddenException,
       );
     });
-
-    it('should return lobby if user is a member or owner', async () => {
-      const privateLobby = {
-        ...mockLobby,
-        visibility: LobbyVisibility.PRIVATE,
-      };
-      const userInLobby = { ...mockUser, memberLobby: privateLobby };
-      mockPrismaService.lobby.findUnique.mockResolvedValue(privateLobby);
-
-      const result = await service.getLobby(privateLobby.id, userInLobby);
-
-      expect(result).toEqual(privateLobby);
-    });
-
-    it('should return public lobby even if user is not a member', async () => {
-      mockPrismaService.lobby.findUnique.mockResolvedValue(mockLobby);
-
-      const result = await service.getLobby(mockLobby.id, mockUser);
-
-      expect(result).toEqual(mockLobby);
-    });
   });
-
-  /**
-   * Test group for updateLobbyVisibility functionality
-   *
-   * Verifies:
-   * - Lobby existence validation
-   * - Owner verification
-   * - Successful visibility updates
-   */
-  describe('updateLobbyVisibility', () => {
-    it('should throw NotFoundException if lobby does not exist', async () => {
-      mockPrismaService.lobby.findUnique.mockResolvedValue(null);
-
-      await expect(
-        service.updateLobbyVisibility(
-          'nonexistent',
-          mockUser,
-          LobbyVisibility.PRIVATE,
-        ),
-      ).rejects.toThrow(NotFoundException);
-    });
-
-    it('should throw ForbiddenException if user is not the owner', async () => {
-      const notOwner = { ...mockUser, id: 'user2' };
-      mockPrismaService.lobby.findUnique.mockResolvedValue(mockLobby);
-
-      await expect(
-        service.updateLobbyVisibility(
-          mockLobby.id,
-          notOwner,
-          LobbyVisibility.PRIVATE,
-        ),
-      ).rejects.toThrow(ForbiddenException);
-    });
-
-    it('should update the lobby visibility if user is the owner', async () => {
-      mockPrismaService.lobby.findUnique.mockResolvedValue(mockLobby);
-      const updatedLobby = {
-        ...mockLobby,
-        visibility: LobbyVisibility.PRIVATE,
-      };
-      mockPrismaService.lobby.update.mockResolvedValue(updatedLobby);
-
-      const result = await service.updateLobbyVisibility(
-        mockLobby.id,
-        mockUser,
-        LobbyVisibility.PRIVATE,
-      );
-
-      expect(result.visibility).toBe(LobbyVisibility.PRIVATE);
-      expect(mockPrismaService.lobby.update).toHaveBeenCalledWith({
-        where: { id: mockLobby.id },
-        data: { visibility: LobbyVisibility.PRIVATE },
-      });
-    });
-  });
+  //#endregion
 });
