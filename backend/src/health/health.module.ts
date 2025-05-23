@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TerminusModule } from '@nestjs/terminus';
 import { HttpModule } from '@nestjs/axios';
-import { ScheduleModule } from '@nestjs/schedule';
 import { HealthController } from './health.controller';
 import { RedisModule } from '../redis/redis.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -17,7 +16,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
     RedisModule,
     PrismaModule,
     ConfigModule,
-    ScheduleModule.forRoot(),
   ],
   controllers: [HealthController],
   providers: [

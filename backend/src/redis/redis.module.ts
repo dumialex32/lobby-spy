@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { RedisProvider } from './redis.provider';
 import { REDIS_CLIENT } from './redis.constants';
 import { RedisThrottlerStorage } from '../throttler/redis-throttler.storage';
+import { Registry } from 'prom-client';
 
 /**
  * RedisModule handles Redis client instantiation and configuration,
@@ -20,8 +21,13 @@ import { RedisThrottlerStorage } from '../throttler/redis-throttler.storage';
       useFactory: (redisProvider: RedisProvider) => redisProvider.getClient(),
       inject: [RedisProvider],
     },
+    // Provide the Registry
+    {
+      provide: Registry,
+      useValue: new Registry(),
+    },
     RedisThrottlerStorage,
   ],
-  exports: [REDIS_CLIENT, RedisProvider, RedisThrottlerStorage],
+  exports: [REDIS_CLIENT, RedisProvider, RedisThrottlerStorage, Registry], // Export Registry
 })
 export class RedisModule {}

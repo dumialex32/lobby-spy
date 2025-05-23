@@ -21,12 +21,6 @@ interface HealthCheckConfig {
   cooldownPeriod?: number;
 }
 
-/**
- * Core Health Service
- * @description Implements health check logic and status aggregation
- * @class {HealthService}
- * @public
- */
 @Injectable()
 export class HealthService {
   private readonly logger = new Logger(HealthService.name);
@@ -43,13 +37,6 @@ export class HealthService {
     private readonly config: HealthCheckConfig,
   ) {}
 
-  /**
-   * Performs basic health checks
-   * @description Implements circuit breaker pattern
-   * @returns {Promise<HealthCheckResult>} Raw health check results
-   * @throws {Error} When circuit breaker threshold is exceeded
-   * @public
-   */
   async getHealthCheck(): Promise<HealthCheckResult> {
     const now = Date.now();
     const cooldown = this.config.cooldownPeriod ?? 30000;
@@ -63,8 +50,8 @@ export class HealthService {
     }
 
     try {
+      // Modified: Removed API check
       const result = await this.health.check([
-        () => this.http.pingCheck('api', this.config.apiEndpoint),
         () => this.prisma.isHealthy('database'),
         this.createRedisCheck(),
       ]);
@@ -77,11 +64,6 @@ export class HealthService {
     }
   }
 
-  /**
-   * Performs detailed system health check
-   * @returns {Promise<HealthCheckResult>} Detailed health results
-   * @public
-   */
   async getDetailedHealthCheck(): Promise<HealthCheckResult> {
     return this.health.check([
       () => this.prisma.isHealthy('database'),
@@ -91,12 +73,6 @@ export class HealthService {
     ]);
   }
 
-  /**
-   * Aggregates health check results into standardized response
-   * @param {HealthCheckResult} result - Raw health check results
-   * @returns {HealthCheckResponseDto} Formatted health status
-   * @public
-   */
   aggregateResults(result: HealthCheckResult): HealthCheckResponseDto {
     const details = result.details;
     const errors: Record<string, any> = {};
@@ -125,10 +101,6 @@ export class HealthService {
     };
   }
 
-  /**
-   * Creates Redis health check function
-   * @private
-   */
   private createRedisCheck(): HealthIndicatorFunction {
     return async () => {
       const startTime = Date.now();
@@ -154,10 +126,6 @@ export class HealthService {
     };
   }
 
-  /**
-   * Checks system dependencies
-   * @private
-   */
   private checkDependencies(): HealthIndicatorFunction {
     return () => ({
       dependencies: {

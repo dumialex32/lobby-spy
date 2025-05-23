@@ -6,11 +6,11 @@ import { ReplayModule } from './replay/replay.module';
 import { LobbyModule } from './lobby/lobby.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
-import { RedisThrottlerStorage } from './throttler/redis-throttler.storage';
 import { RedisModule } from './redis/redis.module';
 import { throttlerConfig } from './throttler/throttler.config';
 import { HealthModule } from './health/health.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -19,9 +19,10 @@ import { MetricsModule } from './metrics/metrics.module';
       envFilePath: `.env.${process.env.NODE_ENV || 'development'}`,
     }),
     RedisModule,
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRootAsync({
-      imports: [RedisModule, ConfigModule],
-      inject: [RedisThrottlerStorage, ConfigService],
+      imports: [ConfigModule],
+      inject: [ConfigService],
       useFactory: throttlerConfig,
     }),
     AuthModule,
