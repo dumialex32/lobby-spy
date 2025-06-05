@@ -18,7 +18,7 @@ interface AuthenticatedSocket extends Socket {
 }
 
 // Mock constants for JWT secret, user, and lobby details
-const MOCK_JWT_SECRET = 'test-secret';
+const MOCK_JWT_ACCESS_SECRET = 'test-secret';
 const MOCK_LOBBY_ID = 'lobby-1';
 const MOCK_USER_ID = 'user-1';
 
@@ -78,7 +78,7 @@ describe('LobbyGateway', () => {
           provide: ConfigService,
           useValue: {
             get: jest.fn((key: string) =>
-              key === 'JWT_SECRET' ? MOCK_JWT_SECRET : null,
+              key === 'JWT_ACCESS_SECRET' ? MOCK_JWT_ACCESS_SECRET : null,
             ),
           },
         },

@@ -5,29 +5,14 @@ import { ConfigService } from '@nestjs/config';
 import { User } from '@prisma/client';
 import { UsersService } from 'src/users/users.service';
 
-/**
- * Interface defining the structure of Steam profile data
- * received during authentication
- */
 interface SteamProfile {
   id: string; // SteamID64 format
   displayName: string; // User's display name
   photos?: Array<{ value: string }>; // Array of profile photos in different sizes
 }
 
-/**
- * Steam Authentication Strategy
- *
- * Implements Passport.js strategy for Steam OpenID authentication
- * Handles both existing and new user authentication flows
- */
 @Injectable()
 export class SteamStrategy extends PassportStrategy(Strategy, 'steam') {
-  /**
-   * Strategy constructor
-   * @param usersService - Service for user database operations
-   * @param configService - Service for accessing configuration
-   */
   constructor(
     private readonly usersService: UsersService,
     configService: ConfigService,
@@ -62,12 +47,6 @@ export class SteamStrategy extends PassportStrategy(Strategy, 'steam') {
     });
   }
 
-  /**
-   * Validation callback - called after successful Steam authentication
-   * @param identifier - Unique Steam identifier
-   * @param profile - User profile data from Steam
-   * @param done - Passport callback function
-   */
   async validate(
     identifier: string,
     profile: SteamProfile,

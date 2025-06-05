@@ -42,9 +42,9 @@ describe('AuthService', () => {
           useValue: {
             get: jest.fn().mockImplementation((key: string) => {
               switch (key) {
-                case 'JWT_SECRET':
+                case 'JWT_ACCESS_SECRET':
                   return 'test-secret'; // Mock JWT signing secret
-                case 'JWT_EXPIRES_IN':
+                case 'JWT_ACCESS_EXPIRES_IN':
                   return '1d'; // Mock token expiration
                 default:
                   return null;
@@ -96,8 +96,8 @@ describe('AuthService', () => {
       );
 
       // Verify config was accessed
-      expect(configService.get).toHaveBeenCalledWith('JWT_SECRET');
-      expect(configService.get).toHaveBeenCalledWith('JWT_EXPIRES_IN');
+      expect(configService.get).toHaveBeenCalledWith('JWT_ACCESS_SECRET');
+      expect(configService.get).toHaveBeenCalledWith('JWT_ACCESS_EXPIRES_IN');
     });
 
     it('should work with minimal required user data', async () => {
@@ -126,20 +126,20 @@ describe('AuthService', () => {
    * - Proper secret usage
    * - Error propagation
    */
-  describe('verifyToken', () => {
+  describe('verifyAccessToken', () => {
     it('should verify token using configured secret', async () => {
       // Arrange: Test token
       const testToken = 'test-token-123';
 
       // Act: Verify token
-      const result = await service.verifyToken(testToken);
+      const result = await service.verifyAccessToken(testToken);
 
       // Assert: Verify results
       expect(result).toEqual({ sub: 'user-id' });
       expect(jwtService.verifyAsync).toHaveBeenCalledWith(testToken, {
         secret: 'test-secret',
       });
-      expect(configService.get).toHaveBeenCalledWith('JWT_SECRET');
+      expect(configService.get).toHaveBeenCalledWith('JWT_ACCESS_SECRET');
     });
 
     it('should propagate verification errors', async () => {
@@ -149,7 +149,7 @@ describe('AuthService', () => {
       );
 
       // Act & Assert: Verify error is thrown
-      await expect(service.verifyToken('invalid-token')).rejects.toThrow(
+      await expect(service.verifyAccessToken('invalid-token')).rejects.toThrow(
         'Invalid token',
       );
     });
@@ -172,16 +172,16 @@ describe('AuthService', () => {
       );
 
       // Assert: Verify config was accessed
-      expect(configService.get).toHaveBeenCalledWith('JWT_SECRET');
-      expect(configService.get).toHaveBeenCalledWith('JWT_EXPIRES_IN');
+      expect(configService.get).toHaveBeenCalledWith('JWT_ACCESS_SECRET');
+      expect(configService.get).toHaveBeenCalledWith('JWT_ACCESS_EXPIRES_IN');
     });
 
     it('should access config when verifying tokens', async () => {
       // Act: Call token verification
-      await service.verifyToken('any-token');
+      await service.verifyAccessToken('any-token');
 
       // Assert: Verify config was accessed
-      expect(configService.get).toHaveBeenCalledWith('JWT_SECRET');
+      expect(configService.get).toHaveBeenCalledWith('JWT_ACCESS_SECRET');
     });
   });
 });

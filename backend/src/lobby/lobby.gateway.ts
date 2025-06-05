@@ -100,7 +100,7 @@ export class LobbyGateway
         lobbyId?: string | null;
         memberLobbyId?: string | null;
       }>(token, {
-        secret: this.configService.get<string>('JWT_SECRET'), // Verify the JWT token.
+        secret: this.configService.get<string>('JWT_ACCESS_SECRET'), // Verify the JWT token.
       });
 
       // Assign user data to the socket instance.

@@ -71,6 +71,7 @@ describe('JwtStrategy', () => {
       const result = await strategy.validate({
         sub: 'user-id', // Standard JWT subject claim
         steamId: 'steam-id', // Our custom claim
+        username: 'username',
       });
 
       // Verify correct user is returned
@@ -92,6 +93,7 @@ describe('JwtStrategy', () => {
         strategy.validate({
           sub: 'user-id',
           steamId: 'steam-id',
+          username: 'username',
         }),
       ).rejects.toThrow(UnauthorizedException);
     });

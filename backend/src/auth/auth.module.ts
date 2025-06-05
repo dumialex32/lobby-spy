@@ -8,6 +8,8 @@ import { JwtStrategy } from './jwt.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UsersModule } from 'src/users/users.module';
+import { RefreshTokenGuard } from './guards/refresh-token.guard';
+import { JwtRefreshStrategy } from './jwt-refresh.strategy';
 
 @Module({
   imports: [
@@ -17,15 +19,22 @@ import { UsersModule } from 'src/users/users.module';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET'),
+        secret: config.get<string>('JWT_ACCESS_SECRET'),
         signOptions: {
-          expiresIn: config.get<string>('JWT_EXPIRES_IN', '7d'),
+          expiresIn: config.get<string>('JWT_ACCESS_EXPIRES_IN', '7d'),
         },
       }),
       inject: [ConfigService],
     }),
   ],
-  providers: [AuthService, SteamStrategy, JwtStrategy, JwtAuthGuard],
+  providers: [
+    AuthService,
+    SteamStrategy,
+    JwtStrategy,
+    JwtRefreshStrategy,
+    JwtAuthGuard,
+    RefreshTokenGuard,
+  ],
   controllers: [AuthController],
   exports: [JwtModule], // Exxport if needed by other modules
 })
